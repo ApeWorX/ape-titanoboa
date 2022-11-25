@@ -53,6 +53,7 @@ setup(
     url="https://github.com/ApeWorX/ape-titanoboa",
     include_package_data=True,
     install_requires=[
+        "eth-ape>=0.5,<0.6",
         "pytest>=7.2,<8.0",
         "titanoboa>=0.1.6",
     ],

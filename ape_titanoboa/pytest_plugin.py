@@ -1,5 +1,6 @@
 import boa  # type: ignore
 import pytest
+from ape.utils import cached_property
 
 
 def pytest_collect_file(file_path, parent):
@@ -9,15 +10,19 @@ def pytest_collect_file(file_path, parent):
 
 class BoaFile(pytest.File):
     def collect(self):
-        self.contract = boa.load(self.path)
-        for name in sorted(self.contract._sigs["self"].keys()):
+        self.contract_deployer = boa.load_partial(self.path)
+        for name in sorted(self.contract_deployer.compiler_data.function_signatures.keys()):
             if name.startswith("test"):
                 yield BoaItem.from_parent(name=name, parent=self)
 
 
 class BoaItem(pytest.Item):
+    @cached_property
+    def contract(self):
+        return self.parent.contract_deployer.deploy()
+
     def runtest(self):
-        getattr(self.parent.contract, self.name)()
+        getattr(self.contract, self.name)()
 
     def repr_failure(self, excinfo):
         """Called when self.runtest() raises an exception."""
