@@ -1,6 +1,6 @@
 # Quick Start
 
-Titanoboa integration and pytest runner
+Use Titanoboa as a provider in Ape.
 
 ## Dependencies
 
@@ -28,7 +28,11 @@ python3 setup.py install
 
 ## Quick Usage
 
-TODO: Describe library overview in code
+Connect to the titanoboa provider and run tests:
+
+```shell
+ape test --network ethereum:local:titanoboa
+```
 
 ## Development
 
