@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=51.1.1", "wheel", "setuptools_scm[toml]>=5.0"]
+requires = ["setuptools>=75.0.0", "wheel", "setuptools_scm[toml]>=5.0"]
 
 [tool.mypy]
 exclude = "build/"
@@ -14,13 +14,13 @@ write_to = "ape_titanoboa/version.py"
 
 [tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310']
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 include = '\.pyi?$'
 
 [tool.pytest.ini_options]
 addopts = """
-    -n auto
     -p no:ape_test
+    -p no:pytest_ethereum
     --cov-branch
     --cov-report term
     --cov-report html
