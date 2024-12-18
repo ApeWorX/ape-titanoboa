@@ -1,5 +1,5 @@
-def test_is_connected(boa_provider):
-    assert boa_provider.is_connected
+def test_is_connected(chain):
+    assert chain.provider.is_connected
 
 
 def test_deploy_contract(contract, owner):
@@ -20,12 +20,12 @@ def test_call(contract, owner):
     assert result == 123
 
 
-def test_get_receipt(contract, owner, boa_provider):
+def test_get_receipt(contract, owner, chain):
     instance = contract.deploy(123, sender=owner)
     tx = instance.setNumber(321, sender=owner)
     tx_hash = tx.txn_hash
 
-    actual = boa_provider.get_receipt(tx_hash)
+    actual = chain.provider.get_receipt(tx_hash)
     assert actual.txn_hash == tx.txn_hash
 
 
@@ -37,3 +37,12 @@ def test_get_nonce(owner, contract):
     contract.deploy(123, sender=owner)
 
     assert owner.nonce == start_nonce + 1
+
+
+def test_tx_events(owner, contract):
+    instance = contract.deploy(123, sender=owner)
+    tx = instance.setNumber(321, sender=owner)
+    actual = tx.events
+    assert len(actual) == 1
+    assert actual[0].prevNum == 123
+    assert actual[0].newNum == 321

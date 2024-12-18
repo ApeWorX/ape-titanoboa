@@ -13,7 +13,7 @@ from ape.exceptions import (
 from ape_ethereum.transactions import TransactionStatusEnum
 from boa import env  # type: ignore
 from eth.exceptions import Revert
-from hexbytes import HexBytes
+from eth_pydantic_types import HexBytes
 
 if TYPE_CHECKING:
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
@@ -27,15 +27,16 @@ class TitanoboaProvider(TestProviderAPI):
     A provider for Ape using titanoboa as its backend.
     """
 
-    _nonces: dict["AddressType", int] = {}
-    _blocks: list[BlockAPI] = []
+    _auto_mine: bool = True
     _block_hashes: dict[str, int] = {}
-    _transactions: dict[str, ReceiptAPI] = {}
+    _blocks: list[BlockAPI] = []
+    _nonces: dict["AddressType", int] = {}
+    _pending_block: dict = {}
     _timestamp: Optional[int] = None
-    _auto_mine: bool = False
+    _transactions: dict[str, ReceiptAPI] = {}
 
     @property
-    def current_timestamp(self) -> int:
+    def pending_timestamp(self) -> int:
         if self._timestamp is not None:
             return self._timestamp
 
@@ -77,7 +78,7 @@ class TitanoboaProvider(TestProviderAPI):
         self._generate_accounts()
 
     def _generate_block_zero(self):
-        data = {"timestamp": self.current_timestamp, "gasLimit": 0, "gasUsed": 0, "number": 0}
+        data = {"timestamp": self.pending_timestamp, "gasLimit": 0, "gasUsed": 0, "number": 0}
         block = self.network.ecosystem.decode_block(data)
         self._blocks = [block]
 
@@ -115,6 +116,18 @@ class TitanoboaProvider(TestProviderAPI):
     def max_gas(self) -> int:
         return env.evm.get_gas_limit()
 
+    @property
+    def pending_block(self) -> BlockAPI:
+        pending_block = self._pending_block
+        pending_block["timestamp"] = self.pending_timestamp
+        pending_block["number"] = len(self._blocks)
+        if "gasUsed" not in pending_block:
+            pending_block["gasUsed"] = 0
+        if "gasLimit" not in pending_block:
+            pending_block["gasLimit"] = 0
+
+        return self.network.ecosystem.decode_block(pending_block)
+
     def get_block(self, block_id: "BlockID") -> BlockAPI:
         if block_id == "latest":
             return self._blocks[-1]
@@ -123,7 +136,7 @@ class TitanoboaProvider(TestProviderAPI):
             return self._blocks[-1]
 
         elif block_id == "pending":
-            raise NotImplementedError("TODO!")
+            return self.pending_block
 
         elif isinstance(block_id, int):
             # By block number.
@@ -220,28 +233,39 @@ class TitanoboaProvider(TestProviderAPI):
             raise self.get_virtual_machine_error(err) from err
 
         new_block_number = (self._blocks[-1].number or 0) + 1
+        gas_used = computation.get_gas_used()
+
+        # Advance block.
+        block_data: dict = {"number": new_block_number, "timestamp": self.pending_timestamp}
+        if self._auto_mine:
+            block_data["gasUsed"] = gas_used
+            block_data["gasLimit"] = txn.gas_limit
+            new_block = self.network.ecosystem.decode_block(block_data)
+            self._blocks.append(new_block)
+        else:
+            self._pending_block = block_data
+
+        logs: list[dict] = []
+        for tx_idx, log in enumerate(computation._log_entries):
+            log_data = {
+                "address": f"0x{log[1].hex()}",
+                "data": log[3],
+                "logIndex": log[0],
+                "transactionHash": txn.txn_hash,
+                "transactionIndex": tx_idx,
+                "topics": [HexBytes(t) for t in log[2]],
+                "type": "mined",
+            }
+            logs.append(log_data)
+
         data = {
             "block_number": new_block_number,
             "contract_address": next(iter(computation.contracts_created), None),
+            "logs": logs,
             "status": TransactionStatusEnum.NO_ERROR,
             "txn_hash": txn.txn_hash,
         }
         receipt = self.network.ecosystem.decode_receipt(data)
-
-        # Advance block.
-        if self._auto_mine:
-            block_data = {
-                "gasUsed": computation.get_gas_used(),
-                "gasLimit": txn.gas_limit,
-                "number": new_block_number,
-                "timestamp": self.current_timestamp,
-            }
-            new_block = self.network.ecosystem.decode_block(block_data)
-            self._blocks.append(new_block)
-
-        # TODO: Queue up block tx data so when mine is called, it gets included.
-
-        # Cache so can lookup later.
         self._transactions[receipt.txn_hash] = receipt
 
         # Bump sender's nonce.
@@ -275,7 +299,7 @@ class TitanoboaProvider(TestProviderAPI):
         block_num = len(self._blocks)
         for _ in range(num_blocks):
             data = {
-                "timestamp": self.current_timestamp,
+                "timestamp": self.pending_timestamp,
                 "gasLimit": 0,
                 "gasUsed": 0,
                 "number": block_num,

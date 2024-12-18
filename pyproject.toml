@@ -20,6 +20,9 @@ include = '\.pyi?$'
 [tool.ape]
 contracts_folder = "tests/contracts"
 
+[tool.ape.ethereum.local]
+default_provider = "titanoboa"
+
 [tool.ape.test]
 show_internal = true
 
