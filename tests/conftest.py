@@ -9,7 +9,7 @@ def boa_provider(networks):
 
 @pytest.fixture(scope="session")
 def contract(project):
-    return project.SomeContract
+    return project.VyperContract
 
 
 @pytest.fixture(scope="session")

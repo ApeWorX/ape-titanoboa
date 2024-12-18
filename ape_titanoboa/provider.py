@@ -13,11 +13,11 @@ from ape.exceptions import (
 from ape_ethereum.transactions import TransactionStatusEnum
 from boa import env  # type: ignore
 from eth.exceptions import Revert
+from hexbytes import HexBytes
 
 if TYPE_CHECKING:
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
-    from eth_pydantic_types import HexBytes
 
     from ape_titanoboa.config import TitanoboaConfig
 
@@ -104,6 +104,7 @@ class TitanoboaProvider(TestProviderAPI):
 
     def estimate_gas_cost(self, txn: TransactionAPI, block_id: Optional["BlockID"] = None) -> int:
         # TODO
+        env.execute_code()
         return 0
 
     @property
@@ -148,14 +149,19 @@ class TitanoboaProvider(TestProviderAPI):
         if not txn.receiver:
             raise ProviderError("Missing receiver.")
 
-        computation = env.execute_code(data=txn.data, to_address=txn.receiver, gas=txn.gas_limit)
+        computation = env.execute_code(
+            data=txn.data,
+            gas=txn.gas_limit,
+            is_modifying=False,
+            to_address=txn.receiver,
+        )
 
         try:
             computation.raise_if_error()
         except Revert as err:
             raise self.get_virtual_machine_error(err) from err
 
-        return computation
+        return HexBytes(computation.output)
 
     def get_receipt(self, txn_hash: str, **kwargs) -> ReceiptAPI:
         try:
@@ -244,7 +250,6 @@ class TitanoboaProvider(TestProviderAPI):
         return receipt
 
     def get_contract_logs(self, log_filter: "LogFilter") -> Iterator["ContractLog"]:
-        # TODO
         yield from []
 
     def snapshot(self) -> "SnapshotID":
