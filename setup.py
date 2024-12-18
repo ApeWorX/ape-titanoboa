@@ -62,13 +62,11 @@ setup(
     include_package_data=True,
     install_requires=[
         "eth-ape>=0.8.22,<0.9",
-        "pytest>=7.2,<9.0",
         "titanoboa>=0.1.6",
     ],
     python_requires=">=3.9,<4",
     extras_require=extras_require,
     py_modules=["ape_titanoboa"],
-    entry_points={"pytest11": ["ape-titanoboa=ape_titanoboa.pytest_plugin"]},
     license="Apache-2.0",
     zip_safe=False,
     keywords="ethereum",
