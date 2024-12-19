@@ -1,5 +1,5 @@
 import time
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, ClassVar
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.api.transactions import ReceiptAPI, TransactionAPI
@@ -15,6 +15,8 @@ from boa import env  # type: ignore
 from eth.exceptions import Revert
 from eth_pydantic_types import HexBytes
 
+from ape_titanoboa.utils import convert_boa_log
+
 if TYPE_CHECKING:
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
@@ -26,6 +28,7 @@ class TitanoboaProvider(TestProviderAPI):
     """
     A provider for Ape using titanoboa as its backend.
     """
+    NAME: ClassVar[str] = "boa"
 
     _auto_mine: bool = True
     _block_hashes: dict[str, int] = {}
@@ -49,7 +52,7 @@ class TitanoboaProvider(TestProviderAPI):
 
     @property
     def config(self) -> "TitanoboaConfig":  # type: ignore
-        return super().config  # type: ignore
+        return self.config_manager.get_config("titanoboa")
 
     @property
     def apetest_config(self) -> "ApeTestConfig":
@@ -149,7 +152,7 @@ class TitanoboaProvider(TestProviderAPI):
         try:
             block_num = self._block_hashes[block_id]
             return self._blocks[block_num]
-        except IndexError:
+        except (IndexError, KeyError):
             raise BlockNotFoundError(block_id)
 
     def send_call(
@@ -245,19 +248,15 @@ class TitanoboaProvider(TestProviderAPI):
         else:
             self._pending_block = block_data
 
-        logs: list[dict] = []
-        for tx_idx, log in enumerate(computation._log_entries):
-            log_data = {
-                "address": f"0x{log[1].hex()}",
-                "data": log[3],
-                "logIndex": log[0],
-                "transactionHash": txn.txn_hash,
-                "transactionIndex": tx_idx,
-                "topics": [HexBytes(t) for t in log[2]],
-                "type": "mined",
-            }
-            logs.append(log_data)
-
+        logs: list[dict] = [
+            convert_boa_log(
+                log,
+                blockNumber=new_block_number,
+                transactionHash=txn.txn_hash,
+                transactionIndex=tx_idx,
+            )
+            for tx_idx, log in enumerate(computation._log_entries)
+        ]
         data = {
             "block_number": new_block_number,
             "contract_address": next(iter(computation.contracts_created), None),

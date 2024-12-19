@@ -1,3 +1,7 @@
+import pytest
+from ape_ethereum.ecosystem import Block
+
+
 def test_is_connected(chain):
     assert chain.provider.is_connected
 
@@ -42,7 +46,16 @@ def test_get_nonce(owner, contract):
 def test_tx_events(owner, contract):
     instance = contract.deploy(123, sender=owner)
     tx = instance.setNumber(321, sender=owner)
+
+    #data = tx.logs[0]["data"].hex()
     actual = tx.events
     assert len(actual) == 1
     assert actual[0].prevNum == 123
     assert actual[0].newNum == 321
+
+
+@pytest.mark.parametrize("block_id", ("latest", "earliest", "pending", 0))
+def test_get_block(chain, block_id):
+    actual = chain.provider.get_block(block_id)
+    repr(actual)
+    assert isinstance(actual, Block)
