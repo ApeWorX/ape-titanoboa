@@ -1,17 +1,16 @@
 import time
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, ClassVar
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.api.transactions import ReceiptAPI, TransactionAPI
 from ape.exceptions import (
-    BlockNotFoundError,
     ContractLogicError,
     ProviderError,
     TransactionNotFoundError,
     VirtualMachineError,
 )
 from ape_ethereum.transactions import TransactionStatusEnum
-from boa import env  # type: ignore
 from eth.exceptions import Revert
 from eth_pydantic_types import HexBytes
 
@@ -20,6 +19,7 @@ from ape_titanoboa.utils import convert_boa_log
 if TYPE_CHECKING:
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
+    from boa.environment import Env  # type: ignore
 
     from ape_titanoboa.config import TitanoboaConfig
 
@@ -28,27 +28,24 @@ class TitanoboaProvider(TestProviderAPI):
     """
     A provider for Ape using titanoboa as its backend.
     """
+
     NAME: ClassVar[str] = "boa"
 
     _auto_mine: bool = True
-    _block_hashes: dict[str, int] = {}
-    _blocks: list[BlockAPI] = []
     _nonces: dict["AddressType", int] = {}
     _pending_block: dict = {}
-    _timestamp: Optional[int] = None
     _transactions: dict[str, ReceiptAPI] = {}
 
-    @property
-    def pending_timestamp(self) -> int:
-        if self._timestamp is not None:
-            return self._timestamp
+    @cached_property
+    def env(self) -> "Env":
+        from boa import env  # type: ignore
 
-        return int(time.time())
+        env.evm.patch.chain_id = self.config.chain_id
+        return env
 
     @property
     def is_connected(self) -> bool:
-        # true when there is a genesis block.
-        return len(self._blocks) > 0
+        return "env" in self.__dict__
 
     @property
     def config(self) -> "TitanoboaConfig":  # type: ignore
@@ -60,7 +57,7 @@ class TitanoboaProvider(TestProviderAPI):
 
     @property
     def chain_id(self) -> int:
-        return self.config.chain_id
+        return self.env.evm.patch.chain_id
 
     @property
     def auto_mine(self) -> bool:
@@ -71,34 +68,29 @@ class TitanoboaProvider(TestProviderAPI):
         self._auto_mine = value
 
     def connect(self):
+        _ = self.env
         self._generate_chain()
 
     def disconnect(self):
-        self._blocks = []
+        self.__dict__.pop("env", None)
 
     def _generate_chain(self):
-        self._generate_block_zero()
         self._generate_accounts()
-
-    def _generate_block_zero(self):
-        data = {"timestamp": self.pending_timestamp, "gasLimit": 0, "gasUsed": 0, "number": 0}
-        block = self.network.ecosystem.decode_block(data)
-        self._blocks = [block]
 
     def _generate_accounts(self):
         balance = self.apetest_config.balance
-        map(lambda a: env.set_balance(a, balance), self.account_manager.test_accounts)
+        map(lambda a: self.env.set_balance(a, balance), self.account_manager.test_accounts)
 
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
 
     def get_balance(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
-        return env.get_balance(address)
+        return self.env.get_balance(address)
 
     def get_code(
         self, address: "AddressType", block_id: Optional["BlockID"] = None
     ) -> "ContractCode":
-        return env.get_code(address)
+        return self.env.get_code(address)
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         raise NotImplementedError()
@@ -108,52 +100,38 @@ class TitanoboaProvider(TestProviderAPI):
 
     def estimate_gas_cost(self, txn: TransactionAPI, block_id: Optional["BlockID"] = None) -> int:
         # TODO
-        env.execute_code()
-        return 0
+        return self.env.evm.chain.estimate_gas(txn)
 
     @property
     def gas_price(self) -> int:
-        return env.get_gas_price()
+        return self.env.get_gas_price()
 
     @property
     def max_gas(self) -> int:
-        return env.evm.get_gas_limit()
-
-    @property
-    def pending_block(self) -> BlockAPI:
-        pending_block = self._pending_block
-        pending_block["timestamp"] = self.pending_timestamp
-        pending_block["number"] = len(self._blocks)
-        if "gasUsed" not in pending_block:
-            pending_block["gasUsed"] = 0
-        if "gasLimit" not in pending_block:
-            pending_block["gasLimit"] = 0
-
-        return self.network.ecosystem.decode_block(pending_block)
+        return self.env.evm.get_gas_limit()
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
         if block_id == "latest":
-            return self._blocks[-1]
-
+            header = self.env.evm.chain.get_canonical_head()
         elif block_id == "earliest":
-            return self._blocks[-1]
-
+            header = self.env.evm.chain.get_canonical_block_by_number(0).header
         elif block_id == "pending":
-            return self.pending_block
-
+            header = self.env.evm.chain.get_block().header
         elif isinstance(block_id, int):
-            # By block number.
-            try:
-                return self._blocks[block_id]
-            except IndexError:
-                raise BlockNotFoundError(block_id)
+            header = self.env.evm.chain.get_canonical_block_by_number(block_id).header
+        else:
+            header = self.env.evm.chain.get_block_by_hash(block_id).header
 
-        # By hash.
-        try:
-            block_num = self._block_hashes[block_id]
-            return self._blocks[block_num]
-        except (IndexError, KeyError):
-            raise BlockNotFoundError(block_id)
+        return self.network.ecosystem.decode_block(
+            {
+                "gasLimit": header.gas_limit,
+                "gasUsed": header.gas_used,
+                "hash": header.hash,
+                "number": header.block_number,
+                "parentHash": header.parent_hash,
+                "timestamp": header.timestamp,
+            }
+        )
 
     def send_call(
         self,
@@ -165,7 +143,7 @@ class TitanoboaProvider(TestProviderAPI):
         if not txn.receiver:
             raise ProviderError("Missing receiver.")
 
-        computation = env.execute_code(
+        computation = self.env.execute_code(
             data=txn.data,
             gas=txn.gas_limit,
             is_modifying=False,
@@ -192,7 +170,8 @@ class TitanoboaProvider(TestProviderAPI):
     def prepare_transaction(self, txn: TransactionAPI) -> TransactionAPI:
         txn.max_fee = 0
         txn.max_priority_fee = 0
-        txn.gas_limit = env.evm.get_gas_limit()
+        txn.gas_limit = self.env.evm.get_gas_limit()
+        txn.chain_id = self.chain_id
         if sender := txn.sender:
             txn.nonce = self._nonces.get(sender, 0)
 
@@ -213,7 +192,7 @@ class TitanoboaProvider(TestProviderAPI):
         # Process tx data.
         if txn.receiver:
             # Method call.
-            computation = env.execute_code(
+            computation = self.env.execute_code(
                 data=txn.data,
                 gas=txn.gas_limit,
                 sender=txn.sender,
@@ -223,7 +202,7 @@ class TitanoboaProvider(TestProviderAPI):
 
         else:
             # Deploy.
-            contract_address, computation = env.deploy(
+            contract_address, computation = self.env.deploy(
                 bytecode=txn.data,
                 gas=txn.gas_limit,
                 sender=txn.sender,
@@ -235,16 +214,20 @@ class TitanoboaProvider(TestProviderAPI):
         except Revert as err:
             raise self.get_virtual_machine_error(err) from err
 
-        new_block_number = (self._blocks[-1].number or 0) + 1
+        new_block_number = self.env.evm.chain.get_block().header.block_number
         gas_used = computation.get_gas_used()
 
         # Advance block.
-        block_data: dict = {"number": new_block_number, "timestamp": self.pending_timestamp}
+        block_data: dict = {
+            "block_number": new_block_number,
+            "timestamp": self.env.evm.patch.timestamp,
+        }
         if self._auto_mine:
-            block_data["gasUsed"] = gas_used
-            block_data["gasLimit"] = txn.gas_limit
-            new_block = self.network.ecosystem.decode_block(block_data)
-            self._blocks.append(new_block)
+            block_data["gas_used"] = gas_used
+            block_data["gas_limit"] = txn.gas_limit
+            header = self.env.evm.vm.get_header()
+            new_block = self.env.evm.vm.get_block_class()(header)
+            self.env.evm.chain.persist_block(new_block)
         else:
             self._pending_block = block_data
 
@@ -276,36 +259,17 @@ class TitanoboaProvider(TestProviderAPI):
         yield from []
 
     def snapshot(self) -> "SnapshotID":
-        return len(self._blocks) - 1  # Latest block number.
+        return self.env.evm.chain.get_canonical_head().hash
 
     def restore(self, snapshot_id: "SnapshotID"):
-        block_number = int(snapshot_id)
-        if block_number > len(self._blocks) - 1:
-            raise ProviderError("snapshot_id (block_number) cannot exceed block HEAD.")
-
-        self._blocks = self._blocks[:2]
-        self._transactions = {
-            tx_hash: tx
-            for tx_hash, tx in self._transactions.items()
-            if tx.block_number <= block_number
-        }
-        # TODO: Undo state in ENV.
+        raise NotImplementedError("TODO")
 
     def set_timestamp(self, new_timestamp: int):
-        self._timestamp = new_timestamp
+        seconds = new_timestamp - self.env.evm.chain.get_canonical_head().timestamp
+        self.env.time_travel(seconds=seconds, blocks=0)
 
     def mine(self, num_blocks: int = 1):
-        block_num = len(self._blocks)
-        for _ in range(num_blocks):
-            data = {
-                "timestamp": self.pending_timestamp,
-                "gasLimit": 0,
-                "gasUsed": 0,
-                "number": block_num,
-            }
-            block = self.network.ecosystem.decode_block(data)
-            self._blocks.append(block)
-            block_num += 1
+        self.env.evm.chain.mine_block()
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):

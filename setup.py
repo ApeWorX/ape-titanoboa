@@ -62,6 +62,7 @@ setup(
     include_package_data=True,
     install_requires=[
         "eth-ape>=0.8.22,<0.9",
+        "cchecksum>=0.0.3,<1",
         "titanoboa>=0.1.6",
     ],
     python_requires=">=3.9,<4",

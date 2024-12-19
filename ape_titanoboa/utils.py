@@ -1,9 +1,10 @@
+from cchecksum import to_checksum_address
 from hexbytes import HexBytes
 
 
 def convert_boa_log(log: tuple, **kwargs) -> dict:
     log_index = log[0]  # TODO: Is this actually the log index? IDK
-    address = f"0x{log[1].hex()}"
+    address = to_checksum_address(f"0x{log[1].hex()}")
     return {
         "address": address,
         "data": log[3],
