@@ -12,13 +12,16 @@ def test_deploy_contract(contract, owner):
     assert instance.contract_type is not None
 
 
-def test_transaction(contract, owner):
+def test_send_transaction(contract, owner):
     instance = contract.deploy(123, sender=owner)
     tx = instance.setNumber(321, sender=owner)
     assert not tx.failed
 
+    # Show that state has changed.
+    assert instance.myNumber() == 321
 
-def test_call(contract, owner):
+
+def test_send_call(contract, owner):
     instance = contract.deploy(123, sender=owner)
     result = instance.myNumber()
     assert result == 123

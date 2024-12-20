@@ -4,15 +4,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.api.transactions import ReceiptAPI, TransactionAPI
-from ape.exceptions import (
-    ContractLogicError,
-    ProviderError,
-    TransactionNotFoundError,
-    VirtualMachineError,
-)
+from ape.exceptions import ContractLogicError, ProviderError, VirtualMachineError
 from ape_ethereum.transactions import TransactionStatusEnum
 from eth.exceptions import Revert
 from eth_pydantic_types import HexBytes
+from eth_utils import to_hex
 
 from ape_titanoboa.utils import convert_boa_log
 
@@ -20,6 +16,7 @@ if TYPE_CHECKING:
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
     from boa.environment import Env  # type: ignore
+    from eth.abc import BlockAPI as VMBlockAPI
 
     from ape_titanoboa.config import TitanoboaConfig
 
@@ -42,6 +39,10 @@ class TitanoboaProvider(TestProviderAPI):
 
         env.evm.patch.chain_id = self.config.chain_id
         return env
+
+    @cached_property
+    def block_class(self) -> type["VMBlockAPI"]:
+        return self.env.evm.vm.get_block_class()
 
     @property
     def is_connected(self) -> bool:
@@ -158,10 +159,11 @@ class TitanoboaProvider(TestProviderAPI):
         return HexBytes(computation.output)
 
     def get_receipt(self, txn_hash: str, **kwargs) -> ReceiptAPI:
-        try:
-            return self._transactions[txn_hash]
-        except KeyError:
-            raise TransactionNotFoundError(txn_hash)
+        return self._transactions[txn_hash]
+        # try:
+        #     self.env.evm.chain.get_transaction_receipt(txn_hash)
+        # except TransactionNotFound:
+        #     raise TransactionNotFoundError(txn_hash)
 
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator[TransactionAPI]:
         # TODO
@@ -215,22 +217,6 @@ class TitanoboaProvider(TestProviderAPI):
             raise self.get_virtual_machine_error(err) from err
 
         new_block_number = self.env.evm.chain.get_block().header.block_number
-        gas_used = computation.get_gas_used()
-
-        # Advance block.
-        block_data: dict = {
-            "block_number": new_block_number,
-            "timestamp": self.env.evm.patch.timestamp,
-        }
-        if self._auto_mine:
-            block_data["gas_used"] = gas_used
-            block_data["gas_limit"] = txn.gas_limit
-            header = self.env.evm.vm.get_header()
-            new_block = self.env.evm.vm.get_block_class()(header)
-            self.env.evm.chain.persist_block(new_block)
-        else:
-            self._pending_block = block_data
-
         logs: list[dict] = [
             convert_boa_log(
                 log,
@@ -245,10 +231,20 @@ class TitanoboaProvider(TestProviderAPI):
             "contract_address": next(iter(computation.contracts_created), None),
             "logs": logs,
             "status": TransactionStatusEnum.NO_ERROR,
+            "transactions": [txn.model_dump()],
             "txn_hash": txn.txn_hash,
         }
         receipt = self.network.ecosystem.decode_receipt(data)
-        self._transactions[receipt.txn_hash] = receipt
+
+        if self._auto_mine:
+            parent_header = self.env.evm.chain.get_canonical_head()
+            new_block_header = self.env.evm.vm.create_header_from_parent(parent_header)
+            new_block = self.block_class(new_block_header, transactions=[], uncles=[])
+            self.env.evm.chain.persist_block(new_block, perform_validation=False)
+            self._transactions[to_hex(txn.txn_hash)] = receipt
+
+        else:
+            raise NotImplementedError("TODO! Handle not automining somehow.")
 
         # Bump sender's nonce.
         self._nonces[txn.sender] = self._nonces.get(txn.sender, 0) + 1
