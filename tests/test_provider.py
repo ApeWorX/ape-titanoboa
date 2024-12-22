@@ -12,31 +12,32 @@ def test_deploy_contract(contract, owner):
     assert instance.contract_type is not None
 
 
-def test_send_transaction(contract, owner):
-    instance = contract.deploy(123, sender=owner)
-    tx = instance.setNumber(321, sender=owner)
+def test_send_transaction(contract_instance, owner):
+    tx = contract_instance.setNumber(321, sender=owner)
     assert not tx.failed
 
     # Show that state has changed.
-    assert instance.myNumber() == 321
+    assert contract_instance.myNumber() == 321
 
 
-def test_send_call(contract, owner):
-    instance = contract.deploy(123, sender=owner)
-    result = instance.myNumber()
+def test_send_call(contract_instance, owner):
+    result = contract_instance.myNumber()
     assert result == 123
 
 
-def test_get_receipt(contract, owner, chain):
-    instance = contract.deploy(123, sender=owner)
-    tx = instance.setNumber(321, sender=owner)
+def test_get_receipt(contract_instance, owner, chain):
+    tx = contract_instance.setNumber(321, sender=owner)
     tx_hash = tx.txn_hash
 
     actual = chain.provider.get_receipt(tx_hash)
     assert actual.txn_hash == tx.txn_hash
 
 
-def test_get_nonce(owner, contract):
+def test_AccountAPI_nonce(owner, contract):
+    """
+    Showing the integration with `AccountAPI.nonce` works
+    (testing `TitanoboaProvider.get_nonce()` indirectly).
+    """
     start_nonce = owner.nonce
     assert isinstance(start_nonce, int)
 
@@ -46,9 +47,12 @@ def test_get_nonce(owner, contract):
     assert owner.nonce == start_nonce + 1
 
 
-def test_tx_events(owner, contract):
-    instance = contract.deploy(123, sender=owner)
-    tx = instance.setNumber(321, sender=owner)
+def test_ReceiptAPI_events(owner, contract_instance):
+    """
+    Shows the integration with `ReceiptAPI.events / decode_logs` works
+    (testing the result of `TitanobaProvider.send_transaction() | .get_receipt()`).
+    """
+    tx = contract_instance.setNumber(321, sender=owner)
     actual = tx.events
     assert len(actual) == 1
     assert actual[0].prevNum == 123
@@ -60,3 +64,10 @@ def test_get_block(chain, block_id):
     actual = chain.provider.get_block(block_id)
     repr(actual)
     assert isinstance(actual, Block)
+
+
+def test_get_transactions_by_block(contract_instance, owner, chain):
+    tx = contract_instance.setNumber(321, sender=owner)
+    actual = list(chain.provider.get_transactions_by_block(chain.blocks.height))
+    assert len(actual) == 1
+    assert actual[0] == tx.transaction

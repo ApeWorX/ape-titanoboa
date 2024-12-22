@@ -160,14 +160,23 @@ class TitanoboaProvider(TestProviderAPI):
 
     def get_receipt(self, txn_hash: str, **kwargs) -> ReceiptAPI:
         return self._transactions[txn_hash]
-        # try:
-        #     self.env.evm.chain.get_transaction_receipt(txn_hash)
-        # except TransactionNotFound:
-        #     raise TransactionNotFoundError(txn_hash)
 
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator[TransactionAPI]:
-        # TODO
-        yield from []
+        if isinstance(block_id, int):
+            yield from self._get_transactions_by_block_number(block_id)
+
+        else:
+            header = self.env.evm.chain.get_block_by_hash(block_id).header
+            yield from self._get_transactions_by_block_number(header.block_number)
+
+    def _get_transactions_by_block_number(self, number: int) -> Iterator[TransactionAPI]:
+        for tx in self._transactions.values():
+            if tx.block_number > number:
+                # perf: exit early if we have exceeded the give number.
+                return
+
+            if tx.block_number == number:
+                yield tx.transaction
 
     def prepare_transaction(self, txn: TransactionAPI) -> TransactionAPI:
         txn.max_fee = 0
