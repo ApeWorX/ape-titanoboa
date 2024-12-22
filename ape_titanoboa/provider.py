@@ -30,8 +30,8 @@ class TitanoboaProvider(TestProviderAPI):
 
     _auto_mine: bool = True
     _nonces: dict["AddressType", int] = {}
-    _pending_block: dict = {}
-    _transactions: dict[str, ReceiptAPI] = {}
+    _canonical_transactions: dict[str, ReceiptAPI] = {}
+    _pending_transactions: dict[str, ReceiptAPI] = {}
 
     @cached_property
     def env(self) -> "Env":
@@ -159,7 +159,7 @@ class TitanoboaProvider(TestProviderAPI):
         return HexBytes(computation.output)
 
     def get_receipt(self, txn_hash: str, **kwargs) -> ReceiptAPI:
-        return self._transactions[txn_hash]
+        return self._canonical_transactions[txn_hash]
 
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator[TransactionAPI]:
         if isinstance(block_id, int):
@@ -170,7 +170,7 @@ class TitanoboaProvider(TestProviderAPI):
             yield from self._get_transactions_by_block_number(header.block_number)
 
     def _get_transactions_by_block_number(self, number: int) -> Iterator[TransactionAPI]:
-        for tx in self._transactions.values():
+        for tx in self._canonical_transactions.values():
             if tx.block_number > number:
                 # perf: exit early if we have exceeded the give number.
                 return
@@ -245,15 +245,13 @@ class TitanoboaProvider(TestProviderAPI):
         }
         receipt = self.network.ecosystem.decode_receipt(data)
 
+        # Prepare new block/transaction.
         if self._auto_mine:
-            parent_header = self.env.evm.chain.get_canonical_head()
-            new_block_header = self.env.evm.vm.create_header_from_parent(parent_header)
-            new_block = self.block_class(new_block_header, transactions=[], uncles=[])
-            self.env.evm.chain.persist_block(new_block, perform_validation=False)
-            self._transactions[to_hex(txn.txn_hash)] = receipt
-
+            self._mine_block()
+            self._canonical_transactions[to_hex(txn.txn_hash)] = receipt
         else:
-            raise NotImplementedError("TODO! Handle not automining somehow.")
+            # Will become canon once `self.mine()` is called.
+            self._pending_transactions[to_hex(txn.txn_hash)] = receipt
 
         # Bump sender's nonce.
         self._nonces[txn.sender] = self._nonces.get(txn.sender, 0) + 1
@@ -274,7 +272,17 @@ class TitanoboaProvider(TestProviderAPI):
         self.env.time_travel(seconds=seconds, blocks=0)
 
     def mine(self, num_blocks: int = 1):
-        self.env.evm.chain.mine_block()
+        if self._pending_transactions:
+            for tx_hash, tx in self._pending_transactions.items():
+                self._canonical_transactions[tx_hash] = tx
+
+        self._mine_block()
+
+    def _mine_block(self):
+        parent_header = self.env.evm.chain.get_canonical_head()
+        new_block_header = self.env.evm.vm.create_header_from_parent(parent_header)
+        new_block = self.block_class(new_block_header, transactions=[], uncles=[])
+        self.env.evm.chain.persist_block(new_block, perform_validation=False)
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
