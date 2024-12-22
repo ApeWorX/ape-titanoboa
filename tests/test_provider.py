@@ -81,6 +81,15 @@ def test_AccountAPI_balance(owner):
     assert owner.balance > 0
 
 
+def test_ChainManager_mine(chain):
+    """
+    Calls `TitanoboaProvider.mine()` under-the-hood.
+    """
+    height = chain.blocks.height
+    chain.mine()
+    assert chain.blocks.height == height + 1
+
+
 def test_auto_mine(chain, owner):
     assert chain.provider.auto_mine
     chain.provider.auto_mine = False
