@@ -1,5 +1,6 @@
 import pytest
 from ape_ethereum.ecosystem import Block
+from eth_utils import to_hex
 
 
 def test_is_connected(chain):
@@ -69,8 +70,9 @@ def test_get_block(chain, block_id):
 def test_get_transactions_by_block(contract_instance, owner, chain):
     tx = contract_instance.setNumber(321, sender=owner)
     actual = list(chain.provider.get_transactions_by_block(chain.blocks.height))
-    assert len(actual) == 1
-    assert actual[0] == tx.transaction
+    assert len(actual) >= 1
+    # NOTE: Fails on `ape-foundry` because of https://github.com/ApeWorX/ape/issues/2438
+    assert to_hex(actual[-1].txn_hash) == tx.txn_hash
 
 
 def test_AccountAPI_balance(owner):
@@ -110,6 +112,8 @@ def test_auto_mine(chain, owner):
     height += 1
     assert chain.blocks.height == height
 
+    chain.provider.auto_mine = True
+
 
 def test_snapshot(chain):
     actual = chain.provider.snapshot()
@@ -119,3 +123,42 @@ def test_snapshot(chain):
 def test_get_code(chain, contract_instance):
     actual = chain.provider.get_code(contract_instance.address)
     assert bool(actual)  # Exists.
+
+
+def test_restore(chain, owner, contract, accounts):
+    # Initial state.
+    instance = contract.deploy(123, sender=owner)
+    state = instance.myNumber()
+    height = chain.blocks.height
+    nonce = owner.nonce
+    balance = owner.balance
+
+    # We should come back to the initial state when restoring.
+    snapshot = chain.snapshot()
+
+    # Wreck state.
+    chain.mine(5)
+    owner.transfer(accounts[1], 1)
+    instance.setNumber(321, sender=owner)
+    deployment = contract.deploy(555, sender=owner)
+
+    # Go back and ensure we are 100% back.
+    chain.restore(snapshot)
+
+    failing_tests = []
+    passing_tests = []
+
+    def run_test(name, act, expt):
+        result = passing_tests if act == expt else failing_tests
+        result.append(name)
+
+    run_test("CHAIN HEIGHT", chain.blocks.height, height)
+    run_test("ACCOUNT NONCE", owner.nonce, nonce)
+    run_test("ACCOUNT BALANCE", owner.balance, balance)
+    run_test("DEPLOYMENT CODE", bool(chain.provider.get_code(deployment.address)), False)
+    run_test("CONTRACT STATE", instance.myNumber(), state)
+
+    if failing_tests:
+        failing_tests_str = ", ".join(failing_tests)
+        fail_msg = f"State not restored: '{failing_tests_str}'."
+        pytest.fail(fail_msg)

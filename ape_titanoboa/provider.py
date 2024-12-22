@@ -1,9 +1,9 @@
 import time
+from copy import copy
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional
 
 from ape.api.providers import BlockAPI, TestProviderAPI
-from ape.api.transactions import ReceiptAPI, TransactionAPI
 from ape.exceptions import ContractLogicError, ProviderError, VirtualMachineError
 from ape_ethereum.transactions import TransactionStatusEnum
 from eth.exceptions import Revert
@@ -13,6 +13,7 @@ from eth_utils import to_hex
 from ape_titanoboa.utils import convert_boa_log
 
 if TYPE_CHECKING:
+    from ape.api.transactions import ReceiptAPI, TransactionAPI
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
     from boa.environment import Env  # type: ignore
@@ -28,11 +29,19 @@ class TitanoboaProvider(TestProviderAPI):
 
     NAME: ClassVar[str] = "boa"
 
+    # Flags.
     _auto_mine: bool = True
-    _nonces: dict["AddressType", int] = {}
-    _canonical_transactions: dict[str, ReceiptAPI] = {}
-    _pending_transactions: dict[str, ReceiptAPI] = {}
     _connected: bool = False
+
+    # Account state.
+    _nonces: dict["AddressType", int] = {}
+
+    # Transaction state.
+    _canonical_transactions: dict[str, dict] = {}
+    _pending_transactions: dict[str, dict] = {}
+
+    # Snapshot state.
+    _snapshot_state: dict["SnapshotID", dict] = {}
 
     @cached_property
     def env(self) -> "Env":
@@ -100,7 +109,7 @@ class TitanoboaProvider(TestProviderAPI):
     def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
         return self._nonces.get(address, 0)
 
-    def estimate_gas_cost(self, txn: TransactionAPI, block_id: Optional["BlockID"] = None) -> int:
+    def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
         # TODO
         return self.env.evm.chain.estimate_gas(txn)
 
@@ -137,7 +146,7 @@ class TitanoboaProvider(TestProviderAPI):
 
     def send_call(
         self,
-        txn: TransactionAPI,
+        txn: "TransactionAPI",
         block_id: Optional["BlockID"] = None,
         state: Optional[dict] = None,
         **kwargs,
@@ -159,10 +168,11 @@ class TitanoboaProvider(TestProviderAPI):
 
         return HexBytes(computation.output)
 
-    def get_receipt(self, txn_hash: str, **kwargs) -> ReceiptAPI:
-        return self._canonical_transactions[txn_hash]
+    def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
+        data = self._canonical_transactions[txn_hash]
+        return self.network.ecosystem.decode_receipt(data)
 
-    def get_transactions_by_block(self, block_id: "BlockID") -> Iterator[TransactionAPI]:
+    def get_transactions_by_block(self, block_id: "BlockID") -> Iterator["TransactionAPI"]:
         if isinstance(block_id, int):
             yield from self._get_transactions_by_block_number(block_id)
 
@@ -170,26 +180,22 @@ class TitanoboaProvider(TestProviderAPI):
             header = self.env.evm.chain.get_block_by_hash(block_id).header
             yield from self._get_transactions_by_block_number(header.block_number)
 
-    def _get_transactions_by_block_number(self, number: int) -> Iterator[TransactionAPI]:
-        for tx in self._canonical_transactions.values():
-            if tx.block_number > number:
+    def _get_transactions_by_block_number(self, number: int) -> Iterator["TransactionAPI"]:
+        for data in self._canonical_transactions.values():
+            if data["block_number"] > number:
                 # perf: exit early if we have exceeded the give number.
                 return
 
-            if tx.block_number == number:
-                yield tx.transaction
+            yield self.network.ecosystem.create_transaction(**data)
 
-    def prepare_transaction(self, txn: TransactionAPI) -> TransactionAPI:
+    def prepare_transaction(self, txn: "TransactionAPI") -> "TransactionAPI":
         txn.max_fee = 0
         txn.max_priority_fee = 0
         txn.gas_limit = self.env.evm.get_gas_limit()
         txn.chain_id = self.chain_id
-        if sender := txn.sender:
-            txn.nonce = self._nonces.get(sender, 0)
-
         return txn
 
-    def send_transaction(self, txn: TransactionAPI) -> ReceiptAPI:
+    def send_transaction(self, txn: "TransactionAPI") -> "ReceiptAPI":
         sender_nonce = self._nonces.get(txn.sender, 0)
         tx_nonce = txn.nonce
         if tx_nonce is None or tx_nonce < sender_nonce:
@@ -236,23 +242,27 @@ class TitanoboaProvider(TestProviderAPI):
             )
             for tx_idx, log in enumerate(computation._log_entries)
         ]
+        txn_data = txn.model_dump()
         data = {
             "block_number": new_block_number,
             "contract_address": next(iter(computation.contracts_created), None),
             "logs": logs,
+            "nonce": txn.nonce,
+            "signature": txn.signature,
             "status": TransactionStatusEnum.NO_ERROR,
-            "transactions": [txn.model_dump()],
+            "transactions": [txn_data],
             "txn_hash": txn.txn_hash,
+            **txn.model_dump(),
         }
         receipt = self.network.ecosystem.decode_receipt(data)
 
         # Prepare new block/transaction.
         if self._auto_mine:
             self._mine_block()
-            self._canonical_transactions[to_hex(txn.txn_hash)] = receipt
+            self._canonical_transactions[to_hex(txn.txn_hash)] = data
         else:
             # Will become canon once `self.mine()` is called.
-            self._pending_transactions[to_hex(txn.txn_hash)] = receipt
+            self._pending_transactions[to_hex(txn.txn_hash)] = data
 
         # Bump sender's nonce.
         self._nonces[txn.sender] = self._nonces.get(txn.sender, 0) + 1
@@ -263,10 +273,21 @@ class TitanoboaProvider(TestProviderAPI):
         yield from []
 
     def snapshot(self) -> "SnapshotID":
-        return self.env.evm.chain.get_canonical_head().hash
+        snapshot = self.env.evm.snapshot()
+
+        self._snapshot_state[snapshot] = {
+            "block_number": self.env.evm.chain.get_canonical_head().block_number,
+            "nonces": copy(self._nonces),  # TODO: Use less memory.
+        }
+
+        return snapshot
 
     def restore(self, snapshot_id: "SnapshotID"):
-        pass
+        # Undoes any chain-state (e.g. deployments, storage, balances).
+        self.env.evm.revert(snapshot_id)
+        state = self._snapshot_state.pop(snapshot_id)
+        self._set_head(state["block_number"])
+        self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
         seconds = new_timestamp - self.env.evm.chain.get_canonical_head().timestamp
@@ -284,6 +305,18 @@ class TitanoboaProvider(TestProviderAPI):
         new_block_header = self.env.evm.vm.create_header_from_parent(parent_header)
         new_block = self.block_class(new_block_header, transactions=[], uncles=[])
         self.env.evm.chain.persist_block(new_block, perform_validation=False)
+
+    def _set_head(self, number: int):
+        target_block_header = self.env.evm.chain.get_canonical_block_header_by_number(number)
+
+        # Because we are using py-evms Block DB still, we have to
+        # updated it manually.
+        with self.env.evm.chain.chaindb.db.atomic_batch() as db:
+            self.env.evm.chain.chaindb._set_as_canonical_chain_head(
+                db,
+                target_block_header,
+                self.env.evm.chain.get_canonical_block_by_number(0).header.parent_hash,
+            )
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
