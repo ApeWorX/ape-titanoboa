@@ -162,3 +162,10 @@ def test_restore(chain, owner, contract, accounts):
         failing_tests_str = ", ".join(failing_tests)
         fail_msg = f"State not restored: '{failing_tests_str}'."
         pytest.fail(fail_msg)
+
+
+def test_estimate_gas_cost(chain, owner, contract_instance):
+    tx = contract_instance.setNumber.as_transaction(123, sender=owner)
+    actual = chain.provider.estimate_gas_cost(tx)
+    breakpoint()
+    assert actual > 0

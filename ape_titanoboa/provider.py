@@ -110,7 +110,6 @@ class TitanoboaProvider(TestProviderAPI):
         return self._nonces.get(address, 0)
 
     def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
-        # TODO
         return self.env.evm.chain.estimate_gas(txn)
 
     @property
