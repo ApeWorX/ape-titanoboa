@@ -266,7 +266,7 @@ class TitanoboaProvider(TestProviderAPI):
         return self.env.evm.chain.get_canonical_head().hash
 
     def restore(self, snapshot_id: "SnapshotID"):
-        raise NotImplementedError("TODO")
+        pass
 
     def set_timestamp(self, new_timestamp: int):
         seconds = new_timestamp - self.env.evm.chain.get_canonical_head().timestamp

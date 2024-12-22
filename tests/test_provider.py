@@ -109,3 +109,13 @@ def test_auto_mine(chain, owner):
     chain.provider.mine()
     height += 1
     assert chain.blocks.height == height
+
+
+def test_snapshot(chain):
+    actual = chain.provider.snapshot()
+    assert actual
+
+
+def test_get_code(chain, contract_instance):
+    actual = chain.provider.get_code(contract_instance.address)
+    assert bool(actual)  # Exists.
