@@ -32,6 +32,7 @@ class TitanoboaProvider(TestProviderAPI):
     _nonces: dict["AddressType", int] = {}
     _canonical_transactions: dict[str, ReceiptAPI] = {}
     _pending_transactions: dict[str, ReceiptAPI] = {}
+    _connected: bool = False
 
     @cached_property
     def env(self) -> "Env":
@@ -46,7 +47,7 @@ class TitanoboaProvider(TestProviderAPI):
 
     @property
     def is_connected(self) -> bool:
-        return "env" in self.__dict__
+        return self._connected
 
     @property
     def config(self) -> "TitanoboaConfig":  # type: ignore
@@ -70,17 +71,17 @@ class TitanoboaProvider(TestProviderAPI):
 
     def connect(self):
         _ = self.env
-        self._generate_chain()
+
+        # Initialize the test accounts' balances.
+        balance = self.apetest_config.balance
+        for account in self.account_manager.test_accounts:
+            self.env.set_balance(account.address, balance)
+
+        self._connected = True
 
     def disconnect(self):
         self.__dict__.pop("env", None)
-
-    def _generate_chain(self):
-        self._generate_accounts()
-
-    def _generate_accounts(self):
-        balance = self.apetest_config.balance
-        map(lambda a: self.env.set_balance(a, balance), self.account_manager.test_accounts)
+        self._connected = False
 
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings

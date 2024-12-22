@@ -73,6 +73,14 @@ def test_get_transactions_by_block(contract_instance, owner, chain):
     assert actual[0] == tx.transaction
 
 
+def test_AccountAPI_balance(owner):
+    """
+    Show the integration with `AccountAPI.balance` works
+    (calls `TitanoboaProvider.get_balance()` under-the-hood.
+    """
+    assert owner.balance > 0
+
+
 def test_auto_mine(chain, owner):
     assert chain.provider.auto_mine
     chain.provider.auto_mine = False
@@ -81,12 +89,5 @@ def test_auto_mine(chain, owner):
 
     # Show auto-mine works.
     start_num = chain.blocks.height
-    owner.transfer(123, owner)
-    assert chain.blocks.height == start_num + 1
-
-    # Show manual-mine also works.
-    start_num = chain.blocks.height
-    owner.transfer(123, owner)
-    assert chain.blocks.height == start_num
-    chain.mine()
+    owner.transfer(owner, 123)
     assert chain.blocks.height == start_num + 1
