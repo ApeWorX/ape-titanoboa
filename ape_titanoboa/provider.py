@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from ape_titanoboa.config import TitanoboaConfig
 
 
-class TitanoboaProvider(TestProviderAPI):
+class BaseTitanoboaProvider(TestProviderAPI):
     """
     A provider for Ape using titanoboa as its backend.
     """
@@ -43,12 +43,9 @@ class TitanoboaProvider(TestProviderAPI):
     # Snapshot state.
     _snapshot_state: dict["SnapshotID", dict] = {}
 
-    @cached_property
+    @property
     def env(self) -> "Env":
-        from boa import env  # type: ignore
-
-        env.evm.patch.chain_id = self.config.chain_id
-        return env
+        raise NotImplementedError("Must be implemented by a subclass.")
 
     @cached_property
     def block_class(self) -> type["VMBlockAPI"]:
@@ -322,3 +319,24 @@ class TitanoboaProvider(TestProviderAPI):
             raise ContractLogicError(revert_message=exception.args[0])
 
         return VirtualMachineError()
+
+
+class TitanoboaProvider(BaseTitanoboaProvider):
+    @cached_property
+    def env(self) -> "Env":
+        from boa import env  # type: ignore
+
+        env.evm.patch.chain_id = self.config.chain_id
+        return env
+
+
+class ForkTitanoboaProvider(BaseTitanoboaProvider):
+    @cached_property
+    def env(self) -> "Env":
+        from boa import fork  # type: ignore
+
+        return fork()
+
+    def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
+        # TODO: Make request directly to upstream URL.
+        pass
