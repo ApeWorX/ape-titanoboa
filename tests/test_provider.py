@@ -167,5 +167,4 @@ def test_restore(chain, owner, contract, accounts):
 def test_estimate_gas_cost(chain, owner, contract_instance):
     tx = contract_instance.setNumber.as_transaction(123, sender=owner)
     actual = chain.provider.estimate_gas_cost(tx)
-    breakpoint()
     assert actual > 0

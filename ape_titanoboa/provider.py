@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.exceptions import ContractLogicError, ProviderError, VirtualMachineError
 from ape_ethereum.transactions import TransactionStatusEnum
+from eth.constants import ZERO_ADDRESS
 from eth.exceptions import Revert
+from eth.vm.spoof import SpoofTransaction
 from eth_pydantic_types import HexBytes
 from eth_utils import to_hex
 
@@ -107,7 +109,18 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return self._nonces.get(address, 0)
 
     def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
-        return self.env.evm.chain.estimate_gas(txn)
+        receiver_bytes = HexBytes(txn.receiver) if txn.receiver else ZERO_ADDRESS
+        evm_tx = self.env.evm.chain.create_unsigned_transaction(
+            data=txn.data,
+            gas=txn.gas,
+            gas_price=0,
+            nonce=txn.nonce or 0,
+            to=receiver_bytes,
+            value=txn.value,
+        )
+        sender_bytes = HexBytes(txn.sender) if txn.sender else ZERO_ADDRESS
+        spoof_tx = SpoofTransaction(evm_tx, from_=sender_bytes)
+        return self.env.evm.chain.estimate_gas(spoof_tx)
 
     @property
     def gas_price(self) -> int:
