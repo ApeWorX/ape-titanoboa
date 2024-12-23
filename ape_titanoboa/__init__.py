@@ -10,6 +10,10 @@ def config_class():
 
 @plugins.register(plugins.ProviderPlugin)
 def providers():
-    from ape_titanoboa.provider import TitanoboaProvider
+    from ape_titanoboa.provider import ForkTitanoboaProvider, TitanoboaProvider
+    from evmchains import PUBLIC_CHAIN_META
 
-    yield "ethereum", "local", TitanoboaProvider
+    for ecosystem, networks in PUBLIC_CHAIN_META.items():
+        yield ecosystem, "local", TitanoboaProvider
+        for network in networks:
+            yield ecosystem, f"{network}-fork", ForkTitanoboaProvider
