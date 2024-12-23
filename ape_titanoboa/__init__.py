@@ -3,9 +3,9 @@ from ape import plugins
 
 @plugins.register(plugins.Config)
 def config_class():
-    from ape_titanoboa.config import TitanoboaConfig
+    from ape_titanoboa.config import BoaConfig
 
-    return TitanoboaConfig
+    return BoaConfig
 
 
 @plugins.register(plugins.ProviderPlugin)

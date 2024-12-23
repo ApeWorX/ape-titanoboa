@@ -20,6 +20,10 @@ include = '\.pyi?$'
 [tool.ape]
 contracts_folder = "tests/contracts"
 
+[tool.ape.titanoboa.fork.ethereum.sepolia]
+upstream_provider = "node"
+block_identifier = 7341111
+
 [tool.ape.ethereum.local]
 default_provider = "boa"
 

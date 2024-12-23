@@ -12,16 +12,18 @@ from eth.vm.spoof import SpoofTransaction
 from eth_pydantic_types import HexBytes
 from eth_utils import to_hex
 
+from ape_titanoboa.config import BoaForkConfig
 from ape_titanoboa.utils import convert_boa_log
 
 if TYPE_CHECKING:
+    from ape.api.networks import ForkedNetworkAPI
     from ape.api.transactions import ReceiptAPI, TransactionAPI
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
     from boa.environment import Env  # type: ignore
     from eth.abc import BlockAPI as VMBlockAPI
 
-    from ape_titanoboa.config import TitanoboaConfig
+    from ape_titanoboa.config import BoaConfig
 
 
 class BaseTitanoboaProvider(TestProviderAPI):
@@ -58,7 +60,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return self._connected
 
     @property
-    def config(self) -> "TitanoboaConfig":  # type: ignore
+    def config(self) -> "BoaConfig":  # type: ignore
         return self.config_manager.get_config("titanoboa")
 
     @property
@@ -348,7 +350,34 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     def env(self) -> "Env":
         from boa import fork  # type: ignore
 
-        return fork()
+        return fork(self.fork_url, block_identifier=self.block_identifier, allow_dirty=True)
+
+    @cached_property
+    def fork_config(self) -> "BoaForkConfig":
+        return (
+            self.config.fork.get(self.network.ecosystem.name, {}).get(
+                self.forked_network.upstream_network.name
+            )
+            or BoaForkConfig()
+        )
+
+    @property
+    def forked_network(self) -> "ForkedNetworkAPI":
+        return self.network  # type: ignore
+
+    @cached_property
+    def fork_url(self) -> str:
+        if provider := self.fork_config.upstream_provider:
+            ctx = self.forked_network.upstream_network.use_provider(provider)
+        else:
+            ctx = self.forked_network.upstream_network.use_default_provider()
+
+        with ctx as upstream_provider:
+            return upstream_provider.http_uri
+
+    @property
+    def block_identifier(self) -> Optional["BlockID"]:
+        return self.fork_config.get("block_identifier")
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         # TODO: Make request directly to upstream URL.
