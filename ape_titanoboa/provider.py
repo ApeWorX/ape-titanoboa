@@ -160,7 +160,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 "gasLimit": header.gas_limit,
                 "gasUsed": header.gas_used,
                 "hash": header.hash,
-                "number": header.block_number,
+                "number": header.block_number + self.boa.env.evm.vm.state.block_number,
                 "parentHash": header.parent_hash,
                 "timestamp": header.timestamp,
             }
