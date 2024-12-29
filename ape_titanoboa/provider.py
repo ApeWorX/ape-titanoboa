@@ -1,6 +1,7 @@
 import time
 from copy import copy
 from functools import cached_property
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional
 
 from ape.api.providers import BlockAPI, TestProviderAPI
@@ -92,6 +93,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def disconnect(self):
         self.__dict__.pop("env", None)
         self._connected = False
+        self.boa.reset_env()
 
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
@@ -337,15 +339,29 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
 
 class TitanoboaProvider(BaseTitanoboaProvider):
+    """
+    The Boa-based provider used for `local` networks.
+    """
+
+    @cached_property
+    def boa(self) -> ModuleType:
+        # perf: cached property is slightly more performant
+        #   than using Python module caching system alone.
+        import boa  # type: ignore
+
+        return boa
+
     @cached_property
     def env(self) -> "Env":
-        from boa import env  # type: ignore
-
-        env.evm.patch.chain_id = self.config.chain_id
-        return env
+        self.boa.env.evm.patch.chain_id = self.config.chain_id
+        return self.boa.env
 
 
 class ForkTitanoboaProvider(BaseTitanoboaProvider):
+    """
+    The Boa-provider used for forked-networks.
+    """
+
     @cached_property
     def env(self) -> "Env":
         from boa import fork  # type: ignore
