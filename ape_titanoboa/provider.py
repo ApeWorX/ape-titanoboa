@@ -49,6 +49,14 @@ class BaseTitanoboaProvider(TestProviderAPI):
     # Snapshot state.
     _snapshot_state: dict["SnapshotID", dict] = {}
 
+    @cached_property
+    def boa(self) -> ModuleType:
+        # perf: cached property is slightly more performant
+        #   than using Python module caching system alone.
+        import boa  # type: ignore
+
+        return boa
+
     @property
     def env(self) -> "Env":
         raise NotImplementedError("Must be implemented by a subclass.")
@@ -345,14 +353,6 @@ class TitanoboaProvider(BaseTitanoboaProvider):
     """
 
     @cached_property
-    def boa(self) -> ModuleType:
-        # perf: cached property is slightly more performant
-        #   than using Python module caching system alone.
-        import boa  # type: ignore
-
-        return boa
-
-    @cached_property
     def env(self) -> "Env":
         self.boa.env.evm.patch.chain_id = self.config.chain_id
         return self.boa.env
@@ -362,6 +362,10 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     """
     The Boa-provider used for forked-networks.
     """
+
+    @cached_property
+    def env(self) -> "Env":
+        return self.boa.env
 
     @cached_property
     def fork(self) -> "Open":
