@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.config import ApeTestConfig
     from boa.environment import Env  # type: ignore
+    from boa.util.open_ctx import Open  # type: ignore
     from eth.abc import BlockAPI as VMBlockAPI
 
     from ape_titanoboa.config import BoaConfig
@@ -363,7 +364,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     """
 
     @cached_property
-    def env(self) -> "Env":
+    def fork(self) -> "Open":
         from boa import fork  # type: ignore
 
         return fork(self.fork_url, block_identifier=self.block_identifier, allow_dirty=True)
@@ -394,6 +395,17 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     @property
     def block_identifier(self) -> Optional["BlockID"]:
         return self.fork_config.get("block_identifier")
+
+    def connect(self):
+        self.fork.__enter__()
+        super().connect()
+
+    def disconnect(self):
+        self.fork.__exit__()
+        super().disconnect()
+
+        for cached_prop in ("fork", "fork_url", "fork_config"):
+            self.__dict__.pop(cached_prop, None)
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         # TODO: Make request directly to upstream URL.
