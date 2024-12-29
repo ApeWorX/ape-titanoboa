@@ -33,6 +33,7 @@ show_internal = true
 [tool.pytest.ini_options]
 addopts = """
     -p no:pytest_ethereum
+    -p no:boa_test
 """
 python_files = "test_*.py"
 testpaths = "tests"
