@@ -283,24 +283,23 @@ class BaseTitanoboaProvider(TestProviderAPI):
         except Revert as err:
             raise self.get_virtual_machine_error(err) from err
 
-        new_block_number = self.env.evm.chain.get_block().header.block_number
-        logs: list[dict] = [
-            convert_boa_log(
-                log,
-                blockNumber=new_block_number,
-                transactionHash=txn.txn_hash,
-                transactionIndex=tx_idx,
-            )
-            for tx_idx, log in enumerate(computation._log_entries)
-        ]
-        txn_data = txn.model_dump()
-
         if txn.signature:
             txn_hash = to_hex(txn.txn_hash)
         else:
             # Impersonated transaction. Make one up using the sender.
             txn_hash = to_hex(int(txn.sender, 16) + txn.nonce)
 
+        new_block_number = self.env.evm.chain.get_block().header.block_number
+        logs: list[dict] = [
+            convert_boa_log(
+                log,
+                blockNumber=new_block_number,
+                transactionHash=txn_hash,
+                transactionIndex=tx_idx,
+            )
+            for tx_idx, log in enumerate(computation._log_entries)
+        ]
+        txn_data = txn.model_dump()
         data = {
             "block_number": new_block_number,
             "computation": computation,
