@@ -2,24 +2,28 @@ import time
 from copy import copy
 from functools import cached_property
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional, Union
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.exceptions import ContractLogicError, ProviderError, VirtualMachineError
+from ape.utils.testing import generate_dev_accounts
 from ape_ethereum.transactions import TransactionStatusEnum
 from eth.constants import ZERO_ADDRESS
 from eth.exceptions import Revert
 from eth.vm.spoof import SpoofTransaction
+from eth_abi import decode
 from eth_pydantic_types import HexBytes
 from eth_utils import to_hex
 
 from ape_titanoboa.config import BoaForkConfig
+from ape_titanoboa.trace import BoaTrace
+from ape_titanoboa.transactions import BoaReceipt, BoaTransaction
 from ape_titanoboa.utils import convert_boa_log
 
 if TYPE_CHECKING:
-    from ape.api.networks import ForkedNetworkAPI
-    from ape.api.transactions import ReceiptAPI, TransactionAPI
+    from ape.api import ForkedNetworkAPI, ReceiptAPI, TestAccountAPI, TraceAPI, TransactionAPI
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
+    from ape_test.accounts import TestAccount
     from ape_test.config import ApeTestConfig
     from boa.environment import Env  # type: ignore
     from boa.util.open_ctx import Open  # type: ignore
@@ -61,6 +65,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def env(self) -> "Env":
         raise NotImplementedError("Must be implemented by a subclass.")
 
+    @property
+    def client_version(self) -> str:
+        return "titanoboa"
+
     @cached_property
     def block_class(self) -> type["VMBlockAPI"]:
         return self.env.evm.vm.get_block_class()
@@ -89,12 +97,30 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def auto_mine(self, value):
         self._auto_mine = value
 
+    @cached_property
+    def dev_acccounts(self) -> list["TestAccount"]:
+        return [
+            self.account_manager.init_test_account(
+                idx,
+                account.address,
+                str(account.private_key),
+            )
+            for idx, account in enumerate(
+                generate_dev_accounts(
+                    self.apetest_config.mnemonic,
+                    self.apetest_config.number_of_accounts,
+                    hd_path=self.apetest_config.hd_path,
+                    start_index=0,
+                )
+            )
+        ]
+
     def connect(self):
         _ = self.env
 
         # Initialize the test accounts' balances.
         balance = self.apetest_config.balance
-        for account in self.account_manager.test_accounts:
+        for account in self.dev_acccounts:
             self.env.set_balance(account.address, balance)
 
         self._connected = True
@@ -102,7 +128,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def disconnect(self):
         self.__dict__.pop("env", None)
         self._connected = False
-        self.boa.reset_env()
+        self.boa.reset_env()  # type: ignore
 
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
@@ -182,7 +208,6 @@ class BaseTitanoboaProvider(TestProviderAPI):
             is_modifying=False,
             to_address=txn.receiver,
         )
-
         try:
             computation.raise_if_error()
         except Revert as err:
@@ -192,7 +217,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
         data = self._canonical_transactions[txn_hash]
-        return self.network.ecosystem.decode_receipt(data)
+        return BoaReceipt(**data)
 
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator["TransactionAPI"]:
         if isinstance(block_id, int):
@@ -208,7 +233,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 # perf: exit early if we have exceeded the give number.
                 return
 
-            yield self.network.ecosystem.create_transaction(**data)
+            yield BoaTransaction(**data)
 
     def prepare_transaction(self, txn: "TransactionAPI") -> "TransactionAPI":
         txn.max_fee = 0
@@ -267,16 +292,19 @@ class BaseTitanoboaProvider(TestProviderAPI):
         txn_data = txn.model_dump()
         data = {
             "block_number": new_block_number,
+            "computation": computation,
             "contract_address": next(iter(computation.contracts_created), None),
+            "gas_limit": txn.gas_limit,
+            "gas_price": 0,
+            "gas_used": computation.get_gas_used(),
             "logs": logs,
             "nonce": txn.nonce,
             "signature": txn.signature,
             "status": TransactionStatusEnum.NO_ERROR,
-            "transactions": [txn_data],
+            "transaction": txn_data,
             "txn_hash": txn.txn_hash,
-            **txn.model_dump(),
         }
-        receipt = self.network.ecosystem.decode_receipt(data)
+        receipt = BoaReceipt(**data)
 
         # Prepare new block/transaction.
         if self._auto_mine:
@@ -342,12 +370,29 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
-            raise ContractLogicError(revert_message=exception.args[0])
+            raw_data = exception.args[0]
+            revert_data = raw_data[4:]
+
+            try:
+                message = decode(("string",), revert_data)[0]
+            except Exception:
+                message = ""
+
+            raise ContractLogicError(revert_message=message)
 
         return VirtualMachineError()
 
     def set_balance(self, address: "AddressType", amount: int):
         self.env.set_balance(address, amount)
+
+    def get_transaction_trace(  # type: ignore[empty-body]
+        self, txn_hash: Union["HexBytes", str]
+    ) -> "TraceAPI":
+        transaction_hash = to_hex(txn_hash) if isinstance(txn_hash, bytes) else f"{txn_hash}"
+        return BoaTrace(transaction_hash=transaction_hash)  # type: ignore
+
+    def get_test_account(self, index: int) -> "TestAccountAPI":
+        return self.dev_acccounts[index]
 
 
 class TitanoboaProvider(BaseTitanoboaProvider):

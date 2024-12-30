@@ -86,7 +86,7 @@ def fooAndBar():
     log BarHappened(1)
 
 @external
-def setNumber(num: uint256):
+def setNumber(num: uint256) -> uint256:
     """
     @notice Sets a new number, with restrictions and event emission
     @dev Only the owner can call this function. The new number cannot be 5.
@@ -100,6 +100,7 @@ def setNumber(num: uint256):
     self.prevNumber = self.myNumber
     self.myNumber = num
     log NumberChange(block.prevhash, self.prevNumber, "Dynamic", num, "Dynamic")
+    return num + 5
 
 @external
 def setAddress(_address: address):

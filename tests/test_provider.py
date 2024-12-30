@@ -1,4 +1,5 @@
 import pytest
+from ape import reverts
 from ape_ethereum.ecosystem import Block
 from eth_utils import to_hex
 
@@ -181,3 +182,24 @@ def test_set_balance(chain, owner):
     new_balance = balance * 2
     chain.provider.set_balance(owner.address, new_balance)
     assert owner.balance == new_balance
+
+
+def test_reverts(contract_instance, accounts):
+    """
+    Integration test with `ape.reverts`.
+    """
+    not_owner = accounts[2]
+    with reverts("!authorized"):
+        contract_instance.setNumber(55, sender=not_owner)
+
+
+def test_trace(contract_instance, owner):
+    """
+    Integration testing various tracing-related features
+    you would use in testing, such `.return_value`.
+    """
+    # `ReceiptAPI.return_value` test.
+    tx = contract_instance.setNumber(456, sender=owner)
+    actual_retval = tx.return_value
+    expected_retval = 461  # 456 + 5 (see smart-contract)
+    assert actual_retval == expected_retval
