@@ -338,7 +338,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         # Prepare new block/transaction.
         if self._auto_mine:
-            self._mine_block()
+            self.env.evm.patch.block_number += 1
             self._canonical_transactions[txn_hash] = data
         else:
             # Will become canon once `self.mine()` is called.
@@ -356,7 +356,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         snapshot = self.env.evm.snapshot()
 
         self._snapshot_state[snapshot] = {
-            "block_number": self.env.evm.chain.get_canonical_head().block_number,
+            "block_number": self.env.evm.patch.block_number,
             "nonces": copy(self._nonces),  # TODO: Use less memory.
         }
 
@@ -366,7 +366,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         # Undoes any chain-state (e.g. deployments, storage, balances).
         self.env.evm.revert(snapshot_id)
         state = self._snapshot_state.pop(snapshot_id)
-        self._set_head(state["block_number"])
+        self.env.evm.patch.block_number = state["block_number"]
         self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
@@ -378,25 +378,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_hash, tx in self._pending_transactions.items():
                 self._canonical_transactions[tx_hash] = tx
 
-        self._mine_block()
-
-    def _mine_block(self):
-        parent_header = self.env.evm.chain.get_canonical_head()
-        new_block_header = self.env.evm.vm.create_header_from_parent(parent_header)
-        new_block = self.block_class(new_block_header, transactions=[], uncles=[])
-        self.env.evm.chain.persist_block(new_block, perform_validation=False)
-
-    def _set_head(self, number: int):
-        target_block_header = self.env.evm.chain.get_canonical_block_header_by_number(number)
-
-        # Because we are using py-evms Block DB still, we have to
-        # updated it manually.
-        with self.env.evm.chain.chaindb.db.atomic_batch() as db:
-            self.env.evm.chain.chaindb._set_as_canonical_chain_head(
-                db,
-                target_block_header,
-                self.env.evm.chain.get_canonical_block_by_number(0).header.parent_hash,
-            )
+        self.env.evm.patch.block_number += 1
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
