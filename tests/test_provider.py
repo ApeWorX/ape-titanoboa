@@ -203,3 +203,12 @@ def test_trace(contract_instance, owner):
     actual_retval = tx.return_value
     expected_retval = 461  # 456 + 5 (see smart-contract)
     assert actual_retval == expected_retval
+
+
+def test_account_impersonation(contract_instance, owner, accounts):
+    """
+    Ensuring the boa integration works with an account-impersonation flow.
+    """
+    impersonated_account = accounts[contract_instance.address]
+    receipt = contract_instance.setBalance(owner, 0, sender=impersonated_account)
+    assert receipt.sender == contract_instance.address

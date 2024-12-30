@@ -290,6 +290,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_idx, log in enumerate(computation._log_entries)
         ]
         txn_data = txn.model_dump()
+
+        if txn.signature:
+            txn_hash = to_hex(txn.txn_hash)
+        else:
+            # Impersonated transaction. Make one up using the sender.
+            txn_hash = to_hex(int(txn.sender, 16) + txn.nonce)
+
         data = {
             "block_number": new_block_number,
             "computation": computation,
@@ -302,17 +309,17 @@ class BaseTitanoboaProvider(TestProviderAPI):
             "signature": txn.signature,
             "status": TransactionStatusEnum.NO_ERROR,
             "transaction": txn_data,
-            "txn_hash": txn.txn_hash,
+            "txn_hash": txn_hash,
         }
         receipt = BoaReceipt(**data)
 
         # Prepare new block/transaction.
         if self._auto_mine:
             self._mine_block()
-            self._canonical_transactions[to_hex(txn.txn_hash)] = data
+            self._canonical_transactions[txn_hash] = data
         else:
             # Will become canon once `self.mine()` is called.
-            self._pending_transactions[to_hex(txn.txn_hash)] = data
+            self._pending_transactions[txn_hash] = data
 
         # Bump sender's nonce.
         self._nonces[txn.sender] = self._nonces.get(txn.sender, 0) + 1
@@ -393,6 +400,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def get_test_account(self, index: int) -> "TestAccountAPI":
         return self.dev_acccounts[index]
+
+    def unlock_account(self, address: "AddressType") -> bool:
+        return True
 
 
 class TitanoboaProvider(BaseTitanoboaProvider):
