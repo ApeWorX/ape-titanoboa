@@ -346,6 +346,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         return VirtualMachineError()
 
+    def set_balance(self, address: "AddressType", amount: int):
+        self.env.set_balance(address, amount)
+
 
 class TitanoboaProvider(BaseTitanoboaProvider):
     """

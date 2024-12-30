@@ -174,3 +174,10 @@ def test_estimate_gas_cost(chain, owner, contract_instance):
     tx = contract_instance.setNumber.as_transaction(123, sender=owner)
     actual = chain.provider.estimate_gas_cost(tx)
     assert actual > 0
+
+
+def test_set_balance(chain, owner):
+    balance = owner.balance
+    new_balance = balance * 2
+    chain.provider.set_balance(owner.address, new_balance)
+    assert owner.balance == new_balance
