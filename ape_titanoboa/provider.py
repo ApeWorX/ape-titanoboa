@@ -240,6 +240,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
         txn.max_priority_fee = 0
         txn.gas_limit = self.env.evm.get_gas_limit()
         txn.chain_id = self.chain_id
+
+        if txn.nonce is None and txn.sender:
+            txn.nonce = self._nonces.get(txn.sender, 0)
+
         return txn
 
     def send_transaction(self, txn: "TransactionAPI") -> "ReceiptAPI":
