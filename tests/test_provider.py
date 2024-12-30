@@ -139,6 +139,7 @@ def test_restore(chain, owner, contract, accounts):
     height = chain.blocks.height
     nonce = owner.nonce
     balance = owner.balance
+    timestamp = chain.blocks.head.timestamp
 
     # We should come back to the initial state when restoring.
     snapshot = chain.snapshot()
@@ -164,6 +165,7 @@ def test_restore(chain, owner, contract, accounts):
     run_test("ACCOUNT BALANCE", owner.balance, balance)
     run_test("DEPLOYMENT CODE", bool(chain.provider.get_code(deployment.address)), False)
     run_test("CONTRACT STATE", instance.myNumber(), state)
+    run_test("BLOCK TIMESTAMP", chain.blocks.head.timestamp, timestamp)
 
     if failing_tests:
         failing_tests_str = ", ".join(failing_tests)

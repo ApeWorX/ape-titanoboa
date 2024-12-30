@@ -64,7 +64,8 @@ setup(
     install_requires=[
         "eth-ape>=0.8.22,<0.9",
         "cchecksum>=0.0.3,<1",
-        "titanoboa>=0.1.6",
+        "titanoboa>=0.2.5,<0.3",
+        "web3>=7.6.1,<8",
     ],
     python_requires=">=3.9,<4",
     extras_require=extras_require,
