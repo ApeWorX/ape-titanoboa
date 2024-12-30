@@ -198,19 +198,36 @@ def test_trace(contract_instance, owner):
     Integration testing various tracing-related features
     you would use in testing, such `.return_value`.
     """
-    # `ReceiptAPI.return_value` test.
     tx = contract_instance.setNumber(456, sender=owner)
+    trace = tx.trace
+    assert trace is not None
+
+    # Root method ABI
+    assert trace.root_method_abi.name == "setNumber"
+
+    # `ReceiptAPI.return_value` test.
     actual_retval = tx.return_value
     expected_retval = 461  # 456 + 5 (see smart-contract)
     assert actual_retval == expected_retval
 
+    # CallTreeNode
+    call_tree_node = tx.trace.get_calltree()
+    assert call_tree_node is not None
 
-def test_account_impersonation(contract_instance, owner, accounts):
+
+def test_account_impersonation(contract, contract_instance, owner, accounts):
     """
     Ensuring the boa integration works with an account-impersonation flow.
     """
     impersonated_account = accounts[contract_instance.address]
     receipt = contract_instance.setBalance(owner, 0, sender=impersonated_account)
     assert receipt.sender == contract_instance.address
-    # TODO: Do a fuller test that includes logs-decoding, maybe some failed transactions,
-    #   and return value.
+
+    new_contract = contract.deploy(555, sender=impersonated_account)
+    tx = new_contract.setNumber(556, sender=impersonated_account)
+    assert tx.sender == impersonated_account.address
+    assert new_contract.myNumber() == 556
+    assert len(tx.logs) > 0
+
+    with reverts("!authorized"):
+        contract_instance.setNumber(55, sender=impersonated_account)

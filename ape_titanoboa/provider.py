@@ -1,3 +1,4 @@
+import re
 import time
 from copy import copy
 from functools import cached_property
@@ -13,7 +14,7 @@ from eth.exceptions import Revert
 from eth.vm.spoof import SpoofTransaction
 from eth_abi import decode
 from eth_pydantic_types import HexBytes
-from eth_utils import to_hex
+from eth_utils import ValidationError, to_hex
 
 from ape_titanoboa.config import BoaForkConfig
 from ape_titanoboa.trace import BoaTrace
@@ -149,17 +150,31 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
         receiver_bytes = HexBytes(txn.receiver) if txn.receiver else ZERO_ADDRESS
-        evm_tx = self.env.evm.chain.create_unsigned_transaction(
-            data=txn.data,
-            gas=txn.gas,
-            gas_price=0,
-            nonce=txn.nonce or 0,
-            to=receiver_bytes,
-            value=txn.value,
-        )
+        evm_tx_data = {
+            "data": txn.data,
+            "gas": txn.gas,
+            "gas_price": 0,
+            "nonce": txn.nonce or 0,
+            "to": receiver_bytes,
+            "value": txn.value,
+        }
+        evm_tx = self.env.evm.chain.create_unsigned_transaction(**evm_tx_data)
         sender_bytes = HexBytes(txn.sender) if txn.sender else ZERO_ADDRESS
         spoof_tx = SpoofTransaction(evm_tx, from_=sender_bytes)
-        return self.env.evm.chain.estimate_gas(spoof_tx)
+        try:
+            return self.env.evm.chain.estimate_gas(spoof_tx)
+        except ValidationError as err:
+            # TODO: Figure out why this happens...
+            if match := re.match(
+                r"Invalid transaction nonce: Expected (\d*), but got \d*", f"{err}"
+            ):
+                expected = int(match.groups()[0])
+                evm_tx_data["nonce"] = expected
+                evm_tx = self.env.evm.chain.create_unsigned_transaction(**evm_tx_data)
+                spoof_tx = SpoofTransaction(evm_tx, from_=sender_bytes)
+                return self.env.evm.chain.estimate_gas(spoof_tx)
+
+            raise  # Raise the error as-is.
 
     @property
     def gas_price(self) -> int:
@@ -233,6 +248,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 # perf: exit early if we have exceeded the give number.
                 return
 
+            # For some reason, transaction API expects bytes.
+            data["txn_hash"] = HexBytes(data["txn_hash"])
+
             yield BoaTransaction(**data)
 
     def prepare_transaction(self, txn: "TransactionAPI") -> "TransactionAPI":
@@ -304,6 +322,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             "block_number": new_block_number,
             "computation": computation,
             "contract_address": next(iter(computation.contracts_created), None),
+            "data": to_hex(txn.data),
             "gas_limit": txn.gas_limit,
             "gas_price": 0,
             "gas_used": computation.get_gas_used(),
@@ -311,6 +330,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             "nonce": txn.nonce,
             "signature": txn.signature,
             "status": TransactionStatusEnum.NO_ERROR,
+            "to": txn.receiver,
             "transaction": txn_data,
             "txn_hash": txn_hash,
         }
