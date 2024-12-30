@@ -212,3 +212,5 @@ def test_account_impersonation(contract_instance, owner, accounts):
     impersonated_account = accounts[contract_instance.address]
     receipt = contract_instance.setBalance(owner, 0, sender=impersonated_account)
     assert receipt.sender == contract_instance.address
+    # TODO: Do a fuller test that includes logs-decoding, maybe some failed transactions,
+    #   and return value.
