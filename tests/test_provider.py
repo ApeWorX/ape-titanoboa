@@ -20,9 +20,11 @@ def test_deploy_contract(contract, owner):
     assert instance.contract_type is not None
 
 
-def test_send_transaction(contract_instance, owner):
+def test_send_transaction(chain, contract_instance, owner):
+    expected_block_number = chain.provider.get_block("pending").number
     tx = contract_instance.setNumber(321, sender=owner)
     assert not tx.failed
+    assert tx.block_number == expected_block_number
 
     # Show that state has changed.
     assert contract_instance.myNumber() == 321
@@ -264,6 +266,16 @@ def test_mine(chain):
     assert actual == expected
 
 
+def test_pending_timestamp(chain):
+    """
+    Show we integrate well with `chain.pending_timestamp`.
+    """
+    pending_ts = chain.pending_timestamp
+    new_ts = pending_ts + 5
+    chain.provider.set_timestamp(new_ts)
+    assert chain.pending_timestamp == new_ts
+
+
 def test_onchain_timestamp(chain, contract_instance, owner):
     """
     Testing that Ape's timestamp is the same as a contract's
@@ -286,10 +298,18 @@ def test_onchain_timestamp(chain, contract_instance, owner):
     chain.provider.set_timestamp(new_ts)
     run_test()
 
-    # # Show still works after transacting.
-    # TODO
-    # block = chain.blocks.head
-    # ts = block.timestamp
-    # tx = contract_instance.setNumber(777, sender=owner)
-    # run_test()
-    # assert tx.timestamp == ts
+    # Show still works after transacting.
+    expected = chain.pending_timestamp
+    expected_block = chain.provider.get_block("pending")
+    tx = contract_instance.setNumber(777, sender=owner)
+    run_test()
+
+    latest_block = chain.provider.get_block("latest")
+    assert tx.block_number == latest_block.number, "Transaction not in latest block."
+    assert tx.block_number == expected_block.number, "Transaction mined on un-expected block."
+
+    actual = tx.timestamp
+    if actual < expected:
+        pytest.fail("Somehow went back in time after mining a new block.")
+    elif actual > expected:
+        pytest.fail("`pending_timestamp` different than what got mined.")

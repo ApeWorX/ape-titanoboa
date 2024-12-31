@@ -183,7 +183,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             timestamp = (
                 self._blocks[block_number]["timestamp"]
                 if block_number in self._blocks
-                else self.env.evm.chain.get_canonical_head().timestamp
+                else self.env.evm.patch.timestamp
             )
 
         elif block_id == "latest":
@@ -202,11 +202,15 @@ class BaseTitanoboaProvider(TestProviderAPI):
             block_number = header.block_number
             timestamp = header.timestamp
 
+        # NOTE: If we don't do this, all the hashes are the same, and that
+        #   creates problems in Ape.
+        fake_hash = HexBytes(int(to_hex(header.hash), 16) + block_number)
+
         return self.network.ecosystem.decode_block(
             {
                 "gasLimit": header.gas_limit,
                 "gasUsed": header.gas_used,
-                "hash": header.hash,
+                "hash": fake_hash,
                 "number": block_number,
                 "parentHash": header.parent_hash,
                 "timestamp": timestamp,
@@ -313,7 +317,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             # Impersonated transaction. Make one up using the sender.
             txn_hash = to_hex(int(txn.sender, 16) + txn.nonce)
 
-        new_block_number = self.env.evm.chain.get_block().header.block_number
+        new_block_number = self.env.evm.patch.block_number + 1
         logs: list[dict] = [
             convert_boa_log(
                 log,
@@ -382,7 +386,8 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
-        seconds = new_timestamp - self.env.evm.chain.get_block().header.timestamp
+        pending_timestamp = self.env.evm.patch.timestamp + 1
+        seconds = new_timestamp - pending_timestamp
         self.env.time_travel(seconds=seconds, blocks=None)
 
     def mine(self, num_blocks: int = 1):
@@ -390,12 +395,19 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_hash, tx in self._pending_transactions.items():
                 self._canonical_transactions[tx_hash] = tx
 
-        self._advance_chain(blocks=num_blocks, seconds=0)
+        self._advance_chain(blocks=num_blocks)
 
-    def _advance_chain(self, blocks: int = 1, seconds: int = 0):
-        self._blocks[self.env.evm.patch.block_number] = {"timestamp": self.env.evm.patch.timestamp}
+    def _advance_chain(self, blocks: int = 1):
+        # Ensure current HEAD is cached.
+        current_timestamp = self.env.evm.patch.timestamp
+        current_height = self.env.evm.patch.block_number
+        self._blocks[current_height] = {"timestamp": current_timestamp}
+
+        # Cache new HEAD.
+        pending_timestamp = current_timestamp + blocks
         self.env.evm.patch.block_number += blocks
-        self.env.evm.patch.timestamp += seconds
+        self.env.evm.patch.timestamp = pending_timestamp
+        self._blocks[self.env.evm.patch.block_number] = {"timestamp": pending_timestamp}
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
