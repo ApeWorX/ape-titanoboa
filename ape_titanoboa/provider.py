@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional, U
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.exceptions import ContractLogicError, ProviderError, VirtualMachineError
-from ape.utils.testing import generate_dev_accounts
 from ape_ethereum.transactions import TransactionStatusEnum
 from eth.constants import ZERO_ADDRESS
 from eth.exceptions import Revert
@@ -46,6 +45,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
     _connected: bool = False
 
     # Account state.
+    _accounts: dict[int, "TestAccount"] = {}
     _nonces: dict["AddressType", int] = {}
 
     # Transaction state.
@@ -100,31 +100,19 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self._auto_mine = value
 
     @cached_property
-    def dev_acccounts(self) -> list["TestAccount"]:
-        return [
-            self.account_manager.init_test_account(
-                idx,
-                account.address,
-                str(account.private_key),
-            )
-            for idx, account in enumerate(
-                generate_dev_accounts(
-                    self.apetest_config.mnemonic,
-                    self.apetest_config.number_of_accounts,
-                    hd_path=self.apetest_config.hd_path,
-                    start_index=0,
-                )
-            )
-        ]
+    def mnemonic_seed(self) -> bytes:
+        # perf: lazy imports so module loads faster.
+        from eth_account.hdaccount.mnemonic import Mnemonic
+
+        return Mnemonic.to_seed(self.apetest_config.mnemonic)
+
+    @cached_property
+    def hdpath_format(self) -> str:
+        hd_path = self.apetest_config.hd_path
+        return hd_path if "{}" in hd_path or "{0}" in hd_path else f"{hd_path.rstrip('/')}/{{}}"
 
     def connect(self):
         _ = self.env
-
-        # Initialize the test accounts' balances.
-        balance = self.apetest_config.balance
-        for account in self.dev_acccounts:
-            self.env.set_balance(account.address, balance)
-
         self._connected = True
 
     def disconnect(self):
@@ -401,9 +389,34 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return BoaTrace(transaction_hash=transaction_hash)  # type: ignore
 
     def get_test_account(self, index: int) -> "TestAccountAPI":
-        return self.dev_acccounts[index]
+        if index in self._accounts:
+            return self._accounts[index]
+
+        # Generate account for the first time.
+        keys = self._generate_keys(index)
+        account = self.account_manager.init_test_account(
+            index,
+            keys[0],
+            str(keys[1]),
+        )
+        self._accounts[index] = account
+
+        # Initialize balance.
+        self.env.set_balance(account.address, self.apetest_config.balance)
+
+        return account
+
+    def _generate_keys(self, index: int) -> tuple[str, str]:
+        # perf: lazy imports so module loads faster.
+        from eth_account.account import Account
+        from eth_account.hdaccount import HDPath
+
+        pkey = to_hex(HDPath(self.hdpath_format.format(index)).derive(self.mnemonic_seed))
+        account = Account.from_key(pkey)
+        return account.address, pkey
 
     def unlock_account(self, address: "AddressType") -> bool:
+        # NOTE: All accounts are basically unlocked in boa.
         return True
 
 
