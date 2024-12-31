@@ -382,7 +382,8 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
-        seconds = new_timestamp - self.env.evm.chain.get_canonical_head().timestamp
+        # TODO: Why do I have minus 1 here (to function similarly to foundry)?
+        seconds = new_timestamp - self.env.evm.chain.get_canonical_head().timestamp - 1
         self.env.time_travel(seconds=seconds, blocks=None)
 
     def mine(self, num_blocks: int = 1):
@@ -390,11 +391,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_hash, tx in self._pending_transactions.items():
                 self._canonical_transactions[tx_hash] = tx
 
-        # NOTE: to align with other providers, each block should
-        #   also increase the timestamp by 1.
-        self._advance_chain(blocks=num_blocks, timestamp=num_blocks)
+        self._advance_chain(blocks=num_blocks, timestamp=0)
 
-    def _advance_chain(self, blocks: int = 1, timestamp: int = 1):
+    def _advance_chain(self, blocks: int = 1, timestamp: int = 0):
         self._blocks[self.env.evm.patch.block_number] = {"timestamp": self.env.evm.patch.timestamp}
         self.env.evm.patch.block_number += blocks
         self.env.evm.patch.timestamp += timestamp

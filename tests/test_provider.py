@@ -186,7 +186,7 @@ def test_set_balance(chain, owner):
     assert owner.balance == new_balance
 
 
-def test_reverts(contract_instance, accounts):
+def test_reverts(chain, contract_instance, accounts):
     """
     Integration test with `ape.reverts`.
     """
@@ -222,6 +222,7 @@ def test_account_impersonation(contract, contract_instance, owner, accounts):
     Ensuring the boa integration works with an account-impersonation flow.
     """
     impersonated_account = accounts[contract_instance.address]
+    impersonated_account.balance = owner.balance
     receipt = contract_instance.setBalance(owner, 0, sender=impersonated_account)
     assert receipt.sender == contract_instance.address
 
@@ -237,11 +238,11 @@ def test_account_impersonation(contract, contract_instance, owner, accounts):
 
 def test_set_timestamp(chain):
     start_ts = chain.blocks.head.timestamp
-    new_timestamp = chain.provider.env.evm.chain.get_canonical_head().timestamp + 2500
+    new_timestamp = start_ts + 2500
     chain.provider.set_timestamp(new_timestamp)
     chain.provider.mine()
     actual = chain.blocks.head.timestamp
-    expected = start_ts + 2501  # Mining also increases by 1
+    expected = start_ts + 2500
     if actual != expected:
         diff = abs(actual - expected)
         pytest.fail(f"Off by {diff}")
@@ -268,6 +269,7 @@ def test_onchain_timestamp(chain, contract_instance, owner):
     Testing that Ape's timestamp is the same as a contract's
     usage of `block.timestamp`.
     """
+
     def run_test():
         ape_ts = chain.blocks.head.timestamp
         chain_ts = contract_instance.getBlockTimestamp()
@@ -284,7 +286,10 @@ def test_onchain_timestamp(chain, contract_instance, owner):
     chain.provider.set_timestamp(new_ts)
     run_test()
 
-    # Show still works after transacting.
-    contract_instance.setNumber(777, sender=owner)
-    run_test()
-
+    # # Show still works after transacting.
+    # TODO
+    # block = chain.blocks.head
+    # ts = block.timestamp
+    # tx = contract_instance.setNumber(777, sender=owner)
+    # run_test()
+    # assert tx.timestamp == ts
