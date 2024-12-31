@@ -6,8 +6,8 @@ from eth_utils import to_hex
 
 @pytest.fixture(scope="module", autouse=True)
 def sepolia_fork(networks):
-    with networks.ethereum.local.use_provider("boa") as fork_provider:
-        yield fork_provider
+    with networks.ethereum.local.use_provider("boa") as provider:
+        yield provider
 
 
 def test_is_connected(chain):
