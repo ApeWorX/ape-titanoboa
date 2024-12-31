@@ -261,3 +261,30 @@ def test_mine(chain):
     actual = chain.blocks.height
     expected = start_number + to_mine
     assert actual == expected
+
+
+def test_onchain_timestamp(chain, contract_instance, owner):
+    """
+    Testing that Ape's timestamp is the same as a contract's
+    usage of `block.timestamp`.
+    """
+    def run_test():
+        ape_ts = chain.blocks.head.timestamp
+        chain_ts = contract_instance.getBlockTimestamp()
+        assert ape_ts == chain_ts
+
+    run_test()
+
+    # Show still works after mining.
+    chain.mine()
+    run_test()
+
+    # Show still works after changing the timestamp manually.
+    new_ts = chain.blocks.head.timestamp + 7
+    chain.provider.set_timestamp(new_ts)
+    run_test()
+
+    # Show still works after transacting.
+    contract_instance.setNumber(777, sender=owner)
+    run_test()
+

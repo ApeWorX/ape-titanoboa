@@ -123,6 +123,11 @@ def getNestedStruct1() -> NestedStruct1:
 
 @view
 @external
+def getBlockTimestamp() -> uint256:
+    return block.timestamp
+
+@view
+@external
 def getNestedStruct2() -> NestedStruct2:
     return NestedStruct2({foo: 2, t: MyStruct({a: msg.sender, b: block.prevhash, c: 244})})
 
