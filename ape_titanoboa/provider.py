@@ -435,7 +435,8 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     def fork(self) -> "Open":
         from boa import fork  # type: ignore
 
-        return fork(self.fork_url, block_identifier=self.block_identifier, allow_dirty=True)
+        block_id = self.block_identifier or "safe"
+        return fork(self.fork_url, block_identifier=block_id, allow_dirty=True)
 
     @cached_property
     def fork_config(self) -> "BoaForkConfig":
