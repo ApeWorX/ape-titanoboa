@@ -495,5 +495,5 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         return result
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
-        # TODO: Make request directly to upstream URL.
-        pass
+        with self._forked_connection as provider:
+            return provider.make_request(rpc, parameters=parameters)
