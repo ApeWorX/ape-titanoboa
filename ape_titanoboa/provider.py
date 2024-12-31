@@ -374,7 +374,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def set_timestamp(self, new_timestamp: int):
         seconds = new_timestamp - self.env.evm.chain.get_canonical_head().timestamp
-        self.env.time_travel(seconds=seconds, blocks=0)
+        self.env.time_travel(seconds=seconds, blocks=None)
 
     def mine(self, num_blocks: int = 1):
         if self._pending_transactions:
