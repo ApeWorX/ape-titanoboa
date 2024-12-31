@@ -186,25 +186,26 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return self.env.evm.get_gas_limit()
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
-        if block_id == "latest":
-            header = self.env.evm.chain.get_canonical_head()
-        elif block_id == "earliest":
-            header = self.env.evm.chain.get_canonical_block_by_number(0).header
-        elif block_id == "pending":
-            header = self.env.evm.chain.get_block().header
-        elif isinstance(block_id, int):
-            header = self.env.evm.chain.get_canonical_block_by_number(block_id).header
-        else:
-            header = self.env.evm.chain.get_block_by_hash(block_id).header
+        header = (
+            self.env.evm.chain.get_block().header
+            if block_id == "pending"
+            else self.env.evm.chain.get_canonical_head()
+        )
+        offset = self.boa.env.evm.vm.state.block_number
+
+        # NOTE: For some reason, this is really important.
+        #   TODO: Add tests and figure out why this matters
+        #   (tests in an example project dependent on timestamp fails w/o).
+        timestamp = header.timestamp + 1
 
         return self.network.ecosystem.decode_block(
             {
                 "gasLimit": header.gas_limit,
                 "gasUsed": header.gas_used,
                 "hash": header.hash,
-                "number": header.block_number + self.boa.env.evm.vm.state.block_number,
+                "number": header.block_number + offset,
                 "parentHash": header.parent_hash,
-                "timestamp": header.timestamp,
+                "timestamp": timestamp,
             }
         )
 
@@ -313,10 +314,11 @@ class BaseTitanoboaProvider(TestProviderAPI):
             convert_boa_log(
                 log,
                 blockNumber=new_block_number,
+                logIndex=log_idx,
                 transactionHash=txn_hash,
-                transactionIndex=tx_idx,
+                transactionIndex=0,
             )
-            for tx_idx, log in enumerate(computation._log_entries)
+            for log_idx, log in enumerate(computation.get_log_entries())
         ]
         txn_data = txn.model_dump()
         data = {
