@@ -241,8 +241,10 @@ def test_set_timestamp(chain):
     chain.provider.set_timestamp(new_timestamp)
     chain.provider.mine()
     actual = chain.blocks.head.timestamp
-    expected = start_ts + 2500
-    assert actual == expected
+    expected = start_ts + 2501  # Mining also increases by 1
+    if actual != expected:
+        diff = abs(actual - expected)
+        pytest.fail(f"Off by {diff}")
 
 
 def test_mine(chain):

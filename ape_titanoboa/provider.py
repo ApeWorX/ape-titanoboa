@@ -55,6 +55,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
     # Snapshot state.
     _snapshot_state: dict["SnapshotID", dict] = {}
 
+    # Block state.
+    _blocks: dict[int, dict] = {}
+
     @cached_property
     def boa(self) -> ModuleType:
         # perf: cached property is slightly more performant
@@ -174,20 +177,39 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return self.env.evm.get_gas_limit()
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
-        header = (
-            self.env.evm.chain.get_block().header
-            if block_id == "pending"
-            else self.env.evm.chain.get_canonical_head()
-        )
-        offset = self.boa.env.evm.vm.state.block_number
+        if isinstance(block_id, int):
+            header = self.env.evm.chain.get_canonical_head()
+            block_number = block_id
+            timestamp = (
+                self._blocks[block_number]["timestamp"]
+                if block_number in self._blocks
+                else self.env.evm.chain.get_canonical_head().timestamp
+            )
+
+        elif block_id == "latest":
+            header = self.env.evm.chain.get_canonical_head()
+            block_number = self.env.evm.patch.block_number
+            timestamp = self.env.evm.patch.timestamp
+
+        elif block_id == "pending":
+            header = self.env.evm.chain.get_block().header
+            block_number = self.env.evm.patch.block_number + 1
+            timestamp = self.env.evm.patch.timestamp + 1
+
+        else:
+            # TODO: Getting blocks by hash may not work too great yet.
+            header = self.env.evm.chain.get_canonical_head()
+            block_number = header.block_number
+            timestamp = header.timestamp
+
         return self.network.ecosystem.decode_block(
             {
                 "gasLimit": header.gas_limit,
                 "gasUsed": header.gas_used,
                 "hash": header.hash,
-                "number": header.block_number + offset,
+                "number": block_number,
                 "parentHash": header.parent_hash,
-                "timestamp": self.env.evm.patch.timestamp,
+                "timestamp": timestamp,
             }
         )
 
@@ -323,7 +345,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         # Prepare new block/transaction.
         if self._auto_mine:
-            self.env.evm.patch.block_number += 1
+            self._advance_chain()
             self._canonical_transactions[txn_hash] = data
         else:
             # Will become canon once `self.mine()` is called.
@@ -351,7 +373,12 @@ class BaseTitanoboaProvider(TestProviderAPI):
         # Undoes any chain-state (e.g. deployments, storage, balances).
         self.env.evm.revert(snapshot_id)
         state = self._snapshot_state.pop(snapshot_id)
-        self.env.evm.patch.block_number = state["block_number"]
+        block_number = state["block_number"]
+        self.env.evm.patch.block_number = block_number
+
+        if ts := self._blocks.get(block_number, {}).get("timestamp"):
+            self.env.evm.patch.timestamp = ts
+
         self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
@@ -363,7 +390,14 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_hash, tx in self._pending_transactions.items():
                 self._canonical_transactions[tx_hash] = tx
 
-        self.env.evm.patch.block_number += num_blocks
+        # NOTE: to align with other providers, each block should
+        #   also increase the timestamp by 1.
+        self._advance_chain(blocks=num_blocks, timestamp=num_blocks)
+
+    def _advance_chain(self, blocks: int = 1, timestamp: int = 1):
+        self._blocks[self.env.evm.patch.block_number] = {"timestamp": self.env.evm.patch.timestamp}
+        self.env.evm.patch.block_number += blocks
+        self.env.evm.patch.timestamp += timestamp
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
