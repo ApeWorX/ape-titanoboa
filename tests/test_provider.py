@@ -233,3 +233,13 @@ def test_account_impersonation(contract, contract_instance, owner, accounts):
 
     with reverts("!authorized"):
         contract_instance.setNumber(55, sender=impersonated_account)
+
+
+def test_set_timestamp(chain):
+    start_ts = chain.blocks.head.timestamp
+    new_timestamp = chain.provider.env.evm.chain.get_canonical_head().timestamp + 2500
+    chain.provider.set_timestamp(new_timestamp)
+    chain.provider.mine()
+    actual = chain.blocks.head.timestamp
+    expected = start_ts + 2500
+    assert actual == expected

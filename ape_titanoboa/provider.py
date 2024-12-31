@@ -192,12 +192,6 @@ class BaseTitanoboaProvider(TestProviderAPI):
             else self.env.evm.chain.get_canonical_head()
         )
         offset = self.boa.env.evm.vm.state.block_number
-
-        # NOTE: For some reason, this is really important.
-        #   TODO: Add tests and figure out why this matters
-        #   (tests in an example project dependent on timestamp fails w/o).
-        timestamp = header.timestamp + 1
-
         return self.network.ecosystem.decode_block(
             {
                 "gasLimit": header.gas_limit,
@@ -205,7 +199,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 "hash": header.hash,
                 "number": header.block_number + offset,
                 "parentHash": header.parent_hash,
-                "timestamp": timestamp,
+                "timestamp": self.env.evm.patch.timestamp,
             }
         )
 
