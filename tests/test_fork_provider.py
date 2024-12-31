@@ -15,3 +15,7 @@ def test_get_latest_block(chain):
     expected = 7341111  # From configuration.
     actual = chain.blocks.height
     assert actual == expected
+
+    # NOTE: It is very important the timestamp is accurate
+    #   for any on-chain state that requires it.
+    assert chain.blocks.head.timestamp == 1734992352

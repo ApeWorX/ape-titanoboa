@@ -23,6 +23,7 @@ from ape_titanoboa.utils import convert_boa_log
 
 if TYPE_CHECKING:
     from ape.api import ForkedNetworkAPI, ReceiptAPI, TestAccountAPI, TraceAPI, TransactionAPI
+    from ape.api.networks import ProviderContextManager
     from ape.types import AddressType, BlockID, ContractCode, ContractLog, LogFilter, SnapshotID
     from ape_test.accounts import TestAccount
     from ape_test.config import ApeTestConfig
@@ -449,23 +450,29 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     def forked_network(self) -> "ForkedNetworkAPI":
         return self.network  # type: ignore
 
+    @property
+    def _forked_connection(self) -> "ProviderContextManager":
+        if provider := self.fork_config.upstream_provider:
+            return self.forked_network.upstream_network.use_provider(provider)
+        else:
+            return self.forked_network.upstream_network.use_default_provider()
+
     @cached_property
     def fork_url(self) -> str:
-        if provider := self.fork_config.upstream_provider:
-            ctx = self.forked_network.upstream_network.use_provider(provider)
-        else:
-            ctx = self.forked_network.upstream_network.use_default_provider()
-
-        with ctx as upstream_provider:
+        with self._forked_connection as upstream_provider:
             return upstream_provider.http_uri
 
     @property
     def block_identifier(self) -> Optional["BlockID"]:
         return self.fork_config.get("block_identifier")
 
+    @cached_property
+    def forked_block_start(self) -> "BlockAPI":
+        with self._forked_connection as upstream_provider:
+            return upstream_provider.get_block(self.block_identifier or "latest")
+
     def connect(self):
         self.fork.__enter__()
-        super().connect()
 
     def disconnect(self):
         self.fork.__exit__()
@@ -473,6 +480,22 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
 
         for cached_prop in ("fork", "fork_url", "fork_config"):
             self.__dict__.pop(cached_prop, None)
+
+    def get_block(self, block_id: "BlockID") -> BlockAPI:
+        start_number = self.forked_block_start.number or 0
+        try:
+            result = super().get_block(block_id)
+        except Exception:
+            # Try upstream.
+            with self._forked_connection as upstream_provider:
+                return upstream_provider.get_block(block_id)
+
+        if result.number is not None and result.number <= start_number:
+            # Correct data such as timestamp, which may be necessary for some tests.
+            with self._forked_connection as upstream_provider:
+                return upstream_provider.get_block(result.number)
+
+        return result
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         # TODO: Make request directly to upstream URL.
