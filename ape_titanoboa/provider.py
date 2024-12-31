@@ -375,7 +375,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_hash, tx in self._pending_transactions.items():
                 self._canonical_transactions[tx_hash] = tx
 
-        self.env.evm.patch.block_number += 1
+        self.env.evm.patch.block_number += num_blocks
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):

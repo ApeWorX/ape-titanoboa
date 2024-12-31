@@ -243,3 +243,19 @@ def test_set_timestamp(chain):
     actual = chain.blocks.head.timestamp
     expected = start_ts + 2500
     assert actual == expected
+
+
+def test_mine(chain):
+    start_number = chain.blocks.height
+    chain.provider.mine()
+    actual = chain.blocks.height
+    expected = start_number + 1
+    assert actual == expected
+
+    # Show can mine more than 1 block.
+    start_number = chain.blocks.height
+    to_mine = 3
+    chain.provider.mine(to_mine)
+    actual = chain.blocks.height
+    expected = start_number + to_mine
+    assert actual == expected
