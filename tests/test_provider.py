@@ -21,10 +21,11 @@ def test_deploy_contract(contract, owner):
 
 
 def test_send_transaction(chain, contract_instance, owner):
-    expected_block_number = chain.provider.get_block("pending").number
+    expected_block = chain.provider.get_block("pending")
     tx = contract_instance.setNumber(321, sender=owner)
     assert not tx.failed
-    assert tx.block_number == expected_block_number
+    assert tx.block_number == expected_block.number
+    assert tx.timestamp == expected_block.timestamp
 
     # Show that state has changed.
     assert contract_instance.myNumber() == 321
