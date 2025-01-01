@@ -122,7 +122,7 @@ def test_auto_mine(chain, owner):
     # Show manual-mine works.
     chain.provider.auto_mine = False
     owner.transfer(owner, 123)
-    assert chain.blocks.height == height  # Didn't ++.
+    assert chain.blocks.height == height, "Chain mined when auto_mine=False"
     chain.provider.mine()
     height += 1
     assert chain.blocks.height == height

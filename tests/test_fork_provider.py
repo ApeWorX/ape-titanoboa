@@ -7,7 +7,7 @@ def sepolia_fork(networks):
         yield fork_provider
 
 
-def test_get_latest_block(chain):
+def test_chain_height(chain):
     """
     Since we are using the fork provider, our chain HEAD should be
     heightened.
@@ -19,3 +19,18 @@ def test_get_latest_block(chain):
     # NOTE: It is very important the timestamp is accurate
     #   for any on-chain state that requires it.
     assert chain.blocks.head.timestamp == 1734992352
+
+
+def test_get_block(chain):
+    block = chain.provider.get_block("latest")
+    assert block.number == 7341111  # From configuration.
+
+    # Mine.
+    chain.provider.mine(5)
+    block = chain.provider.get_block("latest")
+    assert block.number == 7341116
+    block = chain.provider.get_block(7341116)
+    assert block.number == 7341116
+
+    block = chain.provider.get_block(3)
+    assert block.timestamp == 1634951317

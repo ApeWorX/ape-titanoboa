@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from ape_test.config import ApeTestConfig
     from boa.environment import Env  # type: ignore
     from boa.util.open_ctx import Open  # type: ignore
-    from eth.abc import BlockAPI as VMBlockAPI
 
     from ape_titanoboa.config import BoaConfig
 
@@ -60,6 +59,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     # Time.
     _timestamp_offset: int = 0
+    _execution_timestamp: Optional[int] = None  # Used when auto mine is off.
 
     @cached_property
     def boa(self) -> ModuleType:
@@ -76,10 +76,6 @@ class BaseTitanoboaProvider(TestProviderAPI):
     @property
     def client_version(self) -> str:
         return "titanoboa"
-
-    @cached_property
-    def block_class(self) -> type["VMBlockAPI"]:
-        return self.env.evm.vm.get_block_class()
 
     @property
     def is_connected(self) -> bool:
@@ -119,6 +115,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     @property
     def pending_timestamp(self) -> int:
+        if self._execution_timestamp is not None:
+            return self._execution_timestamp
+
+        # Pending timestamp as normal.
         return int(time.time()) + self._timestamp_offset
 
     def connect(self):
@@ -293,6 +293,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 time.sleep(1)
                 sender_nonce = self._nonces.get(txn.sender, 0)
 
+        # Set block.timestamp/number for execution. This must be the
+        # same during execution as it will be in the block.
+        execution_timestamp = self.pending_timestamp
+        new_block_number = self.env.evm.patch.block_number + 1
+        self.env.evm.patch.timestamp = execution_timestamp
+        self.env.evm.patch.block_number = new_block_number
+
         # Process tx data.
         if txn.receiver:
             # Method call.
@@ -313,18 +320,21 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 value=txn.value,
             )
 
+        revert = None
         try:
             computation.raise_if_error()
         except Revert as err:
-            raise self.get_virtual_machine_error(err, txn=txn) from err
+            # The transaction failed. Continue mining the block
+            # before handling.
+            revert = err
 
+        # Figure out the transaction's hash.
         if txn.signature:
             txn_hash = to_hex(txn.txn_hash)
         else:
             # Impersonated transaction. Make one up using the sender.
             txn_hash = to_hex(int(txn.sender, 16) + txn.nonce)
 
-        new_block_number = self.env.evm.patch.block_number + 1
         logs: list[dict] = [
             convert_boa_log(
                 log,
@@ -356,14 +366,21 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         # Prepare new block/transaction.
         if self._auto_mine:
-            self._advance_chain()
+            # Advance the chain.
+            self._blocks.append({"ts": execution_timestamp, "ts_offset": self._timestamp_offset})
             self._canonical_transactions[txn_hash] = data
         else:
             # Will become canon once `self.mine()` is called.
             self._pending_transactions[txn_hash] = data
+            # Undo chain-changes until manually mined.
+            self.env.evm.patch.timestamp = self._blocks[-1]["ts"]
+            self.env.evm.patch.block_number = self.env.evm.patch.block_number - 1
 
         # Bump sender's nonce.
         self._nonces[txn.sender] = self._nonces.get(txn.sender, 0) + 1
+
+        if revert is not None and txn.raise_on_revert:
+            raise self.get_virtual_machine_error(revert) from revert
 
         return receipt
 
@@ -406,10 +423,16 @@ class BaseTitanoboaProvider(TestProviderAPI):
             for tx_hash, tx in self._pending_transactions.items():
                 self._canonical_transactions[tx_hash] = tx
 
+            # Reset so the next execution-set uses the real pending timestamp.
+            self._execution_timestamp = None
+
         self._advance_chain(blocks=num_blocks)
 
     def _advance_chain(self, blocks: int = 1):
         for _ in range(blocks):
+            # NOTE: auto-mine is off, the pending timestamp refers to the timestamp
+            #   set before executing any EVM code (transactions), so it is the same
+            #   in the block as it was when executed.
             timestamp = self.pending_timestamp
             self._blocks.append({"ts": timestamp, "ts_offset": self._timestamp_offset})
             self.env.evm.patch.block_number += 1
@@ -533,6 +556,9 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
 
     def connect(self):
         self.fork.__enter__()
+        block = self.forked_block_start
+        self.env.evm.patch.block_number = block.number
+        self.env.evm.patch.timestamp = block.timestamp
 
     def disconnect(self):
         self.fork.__exit__()
@@ -542,7 +568,6 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
             self.__dict__.pop(cached_prop, None)
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
-        start_number = self.forked_block_start.number or 0
         try:
             result = super().get_block(block_id)
         except Exception:
@@ -550,6 +575,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
             with self._forked_connection as upstream_provider:
                 return upstream_provider.get_block(block_id)
 
+        start_number = self.forked_block_start.number or 0
         if result.number is not None and result.number <= start_number:
             # Correct data such as timestamp, which may be necessary for some tests.
             with self._forked_connection as upstream_provider:
