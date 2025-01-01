@@ -30,6 +30,11 @@ def test_send_transaction(chain, contract_instance, owner):
     # Show that state has changed.
     assert contract_instance.myNumber() == 321
 
+    # Show the "new" pending block is expected (+1).
+    new_pending_block = chain.provider.get_block("pending")
+    assert new_pending_block.number == expected_block.number + 1
+    assert new_pending_block.timestamp >= expected_block.timestamp
+
 
 def test_send_call(contract_instance, owner):
     result = contract_instance.myNumber()
