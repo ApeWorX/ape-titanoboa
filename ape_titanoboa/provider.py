@@ -56,7 +56,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
     _snapshot_state: dict["SnapshotID", dict] = {}
 
     # Block state.
-    _blocks: dict[int, dict] = {}
+    _blocks: list[dict] = []
+
+    # Time.
+    _timestamp_offset: int = 0
 
     @cached_property
     def boa(self) -> ModuleType:
@@ -113,6 +116,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def hdpath_format(self) -> str:
         hd_path = self.apetest_config.hd_path
         return hd_path if "{}" in hd_path or "{0}" in hd_path else f"{hd_path.rstrip('/')}/{{}}"
+
+    @property
+    def pending_timestamp(self) -> int:
+        return int(time.time()) + self._timestamp_offset
 
     def connect(self):
         _ = self.env
@@ -181,7 +188,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             header = self.env.evm.chain.get_canonical_head()
             block_number = block_id
             timestamp = (
-                self._blocks[block_number]["timestamp"]
+                self._blocks[block_number]["ts"]
                 if block_number in self._blocks
                 else self.env.evm.patch.timestamp
             )
@@ -194,7 +201,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         elif block_id == "pending":
             header = self.env.evm.chain.get_block().header
             block_number = self.env.evm.patch.block_number + 1
-            timestamp = self.env.evm.patch.timestamp + 1
+            timestamp = self.pending_timestamp
 
         else:
             # TODO: Getting blocks by hash may not work too great yet.
@@ -309,7 +316,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         try:
             computation.raise_if_error()
         except Revert as err:
-            raise self.get_virtual_machine_error(err) from err
+            raise self.get_virtual_machine_error(err, txn=txn) from err
 
         if txn.signature:
             txn_hash = to_hex(txn.txn_hash)
@@ -380,15 +387,19 @@ class BaseTitanoboaProvider(TestProviderAPI):
         block_number = state["block_number"]
         self.env.evm.patch.block_number = block_number
 
-        if ts := self._blocks.get(block_number, {}).get("timestamp"):
-            self.env.evm.patch.timestamp = ts
+        if block_number < len(self._blocks):
+            old_block = self._blocks[block_number]
+            self.env.evm.patch.timestamp = old_block["ts"]
+            self._timestamp_offset = old_block["ts_offset"]
+            new_height = block_number + 1
+            self._blocks = self._blocks[:new_height]
 
         self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
-        pending_timestamp = self.env.evm.patch.timestamp + 1
-        seconds = new_timestamp - pending_timestamp
-        self.env.time_travel(seconds=seconds, blocks=None)
+        current_timestamp = self.pending_timestamp
+        difference = new_timestamp - current_timestamp
+        self._timestamp_offset += difference
 
     def mine(self, num_blocks: int = 1):
         if self._pending_transactions:
@@ -398,16 +409,11 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self._advance_chain(blocks=num_blocks)
 
     def _advance_chain(self, blocks: int = 1):
-        # Ensure current HEAD is cached.
-        current_timestamp = self.env.evm.patch.timestamp
-        current_height = self.env.evm.patch.block_number
-        self._blocks[current_height] = {"timestamp": current_timestamp}
-
-        # Cache new HEAD.
-        pending_timestamp = current_timestamp + blocks
-        self.env.evm.patch.block_number += blocks
-        self.env.evm.patch.timestamp = pending_timestamp
-        self._blocks[self.env.evm.patch.block_number] = {"timestamp": pending_timestamp}
+        for _ in range(blocks):
+            timestamp = self.pending_timestamp
+            self._blocks.append({"ts": timestamp, "ts_offset": self._timestamp_offset})
+            self.env.evm.patch.block_number += 1
+            self.env.evm.patch.timestamp = timestamp
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
@@ -419,9 +425,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
             except Exception:
                 message = ""
 
-            raise ContractLogicError(revert_message=message)
+            raise ContractLogicError(revert_message=message, **kwargs)
 
-        return VirtualMachineError()
+        return VirtualMachineError(**kwargs)
 
     def set_balance(self, address: "AddressType", amount: int):
         self.env.set_balance(address, amount)

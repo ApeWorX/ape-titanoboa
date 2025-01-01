@@ -317,5 +317,3 @@ def test_onchain_timestamp(chain, contract_instance, owner):
     actual = tx.timestamp
     if actual < expected:
         pytest.fail("Somehow went back in time after mining a new block.")
-    elif actual > expected:
-        pytest.fail("`pending_timestamp` different than what got mined.")
