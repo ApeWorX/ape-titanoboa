@@ -6,7 +6,12 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional, Union
 
 from ape.api.providers import BlockAPI, TestProviderAPI
-from ape.exceptions import ContractLogicError, ProviderError, VirtualMachineError
+from ape.exceptions import (
+    ContractLogicError,
+    ProviderError,
+    TransactionNotFoundError,
+    VirtualMachineError,
+)
 from ape_ethereum.transactions import TransactionStatusEnum
 from eth.constants import ZERO_ADDRESS
 from eth.exceptions import Revert
@@ -258,7 +263,11 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return HexBytes(computation.output)
 
     def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
-        data = self._canonical_transactions[txn_hash]
+        try:
+            data = self._canonical_transactions[txn_hash]
+        except KeyError as err:
+            raise TransactionNotFoundError(txn_hash) from err
+
         return BoaReceipt(**data)
 
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator["TransactionAPI"]:

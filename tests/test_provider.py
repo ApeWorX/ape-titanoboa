@@ -2,6 +2,7 @@ import time
 
 import pytest
 from ape import reverts
+from ape.exceptions import TransactionNotFoundError
 from ape_ethereum.ecosystem import Block
 from eth_utils import to_hex
 
@@ -49,6 +50,10 @@ def test_get_receipt(contract_instance, owner, chain):
 
     actual = chain.provider.get_receipt(tx_hash)
     assert actual.txn_hash == tx.txn_hash
+
+    # Show we get the correct error when the receipt is not found.
+    with pytest.raises(TransactionNotFoundError):
+        chain.provider.get_receipt("asdfasdfasdf")
 
 
 def test_AccountAPI_nonce(owner, contract):
