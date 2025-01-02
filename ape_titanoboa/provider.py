@@ -137,6 +137,14 @@ class BaseTitanoboaProvider(TestProviderAPI):
         #   frozen time. This keeps us passed that point.
         return int(time.time()) + self._timestamp_offset
 
+    @property
+    def gas_price(self) -> int:
+        return self.env.get_gas_price()
+
+    @property
+    def max_gas(self) -> int:
+        return self.env.evm.get_gas_limit()
+
     def connect(self):
         _ = self.env
         self._connected = True
@@ -198,14 +206,6 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 return self.env.evm.chain.estimate_gas(spoof_tx)
 
             raise  # Raise the error as-is.
-
-    @property
-    def gas_price(self) -> int:
-        return self.env.get_gas_price()
-
-    @property
-    def max_gas(self) -> int:
-        return self.env.evm.get_gas_limit()
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
         if isinstance(block_id, int):
