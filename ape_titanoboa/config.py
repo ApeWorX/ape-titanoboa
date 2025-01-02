@@ -2,7 +2,11 @@ from typing import Optional
 
 from ape.api.config import PluginConfig
 from ape.types import BlockID
-from ape.utils.testing import DEFAULT_TEST_CHAIN_ID
+
+# TODO: https://github.com/ApeWorX/ape/issues/2454 is resolved,
+#   can use `ape.utils.testing.DEFAULT_TEST_CHAIN_ID`, but for
+#   now we want this to be the same as ape-foundry's default.
+DEFAULT_TEST_CHAIN_ID = 31337
 
 
 class BoaForkConfig(PluginConfig):

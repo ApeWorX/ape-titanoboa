@@ -4,6 +4,7 @@ import pytest
 from ape import reverts
 from ape.exceptions import BlockNotFoundError, TransactionNotFoundError
 from eth_utils import to_hex
+from ape_titanoboa.config import DEFAULT_TEST_CHAIN_ID
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -424,3 +425,9 @@ def test_onchain_timestamp(chain, contract_instance, owner):
     actual = tx.timestamp
     if actual < expected:
         pytest.fail("Somehow went back in time after mining a new block.")
+
+
+def test_chain_id(chain):
+    actual = chain.provider.chain_id
+    expected = DEFAULT_TEST_CHAIN_ID
+    assert actual == expected
