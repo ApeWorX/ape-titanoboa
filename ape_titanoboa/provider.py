@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional, U
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.exceptions import (
+    BlockNotFoundError,
     ContractLogicError,
     ProviderError,
     TransactionNotFoundError,
@@ -139,11 +140,19 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def connect(self):
         _ = self.env
         self._connected = True
+        # Add genesis block.
+        self._blocks.append({"ts": self.env.evm.patch.timestamp})
+        self.env.evm.patch.block_number = 0
 
     def disconnect(self):
         self.__dict__.pop("env", None)
         self._connected = False
         self.boa.reset_env()  # type: ignore
+        self._blocks = []
+        self._pending_timestamp = None
+        self._timestamp_offset = 0
+        self._canonical_transactions = {}
+        self._pending_transactions = {}
 
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
@@ -202,16 +211,20 @@ class BaseTitanoboaProvider(TestProviderAPI):
         if isinstance(block_id, int):
             header = self.env.evm.chain.get_canonical_head()
             block_number = block_id
-            timestamp = (
-                self._blocks[block_number]["ts"]
-                if block_number in self._blocks
-                else self.env.evm.patch.timestamp
-            )
+            try:
+                timestamp = self._blocks[block_number]["ts"]
+            except IndexError:
+                raise BlockNotFoundError(block_id)
+
+        elif block_id == "earliest":
+            header = self.env.evm.chain.get_canonical_head()
+            block_number = 0
+            timestamp = self._blocks[0]["ts"]
 
         elif block_id == "latest":
             header = self.env.evm.chain.get_canonical_head()
-            block_number = self.env.evm.patch.block_number
-            timestamp = self.env.evm.patch.timestamp
+            block_number = len(self._blocks) - 1
+            timestamp = self._blocks[block_number]["ts"]
 
         elif block_id == "pending":
             header = self.env.evm.chain.get_block().header
@@ -219,10 +232,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
             timestamp = self.pending_timestamp
 
         else:
-            # TODO: Getting blocks by hash may not work too great yet.
+            # By hash.
             header = self.env.evm.chain.get_canonical_head()
-            block_number = header.block_number
-            timestamp = header.timestamp
+            block_number = int(to_hex(block_id), 16) - int(to_hex(header.hash), 16)
+            try:
+                timestamp = self._blocks[block_number]["ts"]
+            except IndexError:
+                raise BlockNotFoundError(block_id)
 
         # NOTE: If we don't do this, all the hashes are the same, and that
         #   creates problems in Ape.

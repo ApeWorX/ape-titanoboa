@@ -2,8 +2,7 @@ import time
 
 import pytest
 from ape import reverts
-from ape.exceptions import TransactionNotFoundError
-from ape_ethereum.ecosystem import Block
+from ape.exceptions import BlockNotFoundError, TransactionNotFoundError
 from eth_utils import to_hex
 
 
@@ -82,11 +81,44 @@ def test_ReceiptAPI_events(owner, contract_instance):
     assert actual[0].newNum == 321
 
 
-@pytest.mark.parametrize("block_id", ("latest", "earliest", "pending", 0))
-def test_get_block(chain, block_id):
-    actual = chain.provider.get_block(block_id)
-    repr(actual)
-    assert isinstance(actual, Block)
+def test_get_block(chain):
+    # Earliest block (genesis).
+    zero_block = chain.provider.get_block(0)
+    earliest_block = chain.provider.get_block("earliest")
+    assert zero_block.number == 0
+    assert earliest_block.number == 0
+    assert zero_block.hash == earliest_block.hash
+
+    # Latest block (chain height).
+    chain.mine()
+    latest_block = chain.provider.get_block("latest")
+    latest_block_by_number = chain.provider.get_block(latest_block.number)
+    assert latest_block_by_number.number == latest_block.number
+    assert latest_block.hash != earliest_block.hash
+
+    # Pending block.
+    pending_block = chain.provider.get_block("pending")
+    assert pending_block.number == latest_block.number + 1
+    assert pending_block.hash != latest_block.hash
+    assert pending_block.hash != zero_block.hash
+
+    # By number.
+    chain.mine(5)
+    number = chain.blocks.height - 3
+    block_by_number = chain.provider.get_block(number)
+    assert block_by_number.number == number
+    with pytest.raises(BlockNotFoundError):
+        chain.provider.get_block(chain.blocks.height + 100)
+
+    # Show "earliest" still works after mining.
+    earliest_again = chain.provider.get_block("earliest")
+    assert earliest_again.number == earliest_block.number
+
+    # By hash.
+    block_by_hash = chain.provider.get_block(block_by_number.hash)
+    assert block_by_hash.number == block_by_number.number
+    with pytest.raises(BlockNotFoundError):
+        chain.provider.get_block(b"111111")
 
 
 def test_get_transactions_by_block(contract_instance, owner, chain):
