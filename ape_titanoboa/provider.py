@@ -287,12 +287,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return BoaReceipt(**data)
 
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator["TransactionAPI"]:
-        if isinstance(block_id, int):
-            yield from self._get_transactions_by_block_number(block_id)
-
-        else:
-            header = self.env.evm.chain.get_block_by_hash(block_id).header
-            yield from self._get_transactions_by_block_number(header.block_number)
+        block = self.get_block(block_id)
+        if block.number is not None:
+            yield from self._get_transactions_by_block_number(block.number)  # type: ignore
 
     def _get_transactions_by_block_number(self, number: int) -> Iterator["TransactionAPI"]:
         for data in self._canonical_transactions.values():

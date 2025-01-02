@@ -123,9 +123,12 @@ def test_get_block(chain):
 
 def test_get_transactions_by_block(contract_instance, owner, chain):
     tx = contract_instance.setNumber(321, sender=owner)
-    actual = list(chain.provider.get_transactions_by_block(chain.blocks.height))
-    assert len(actual) >= 1
-    # NOTE: Fails on `ape-foundry` because of https://github.com/ApeWorX/ape/issues/2438
+    latest_block = chain.blocks.head
+
+    for block_id in ("latest", latest_block.number, latest_block.hash):
+        actual = list(chain.provider.get_transactions_by_block(block_id))
+        assert len(actual) >= 1
+
     assert to_hex(actual[-1].txn_hash) == tx.txn_hash
 
 
