@@ -181,6 +181,45 @@ def test_restore(chain, owner, contract, accounts):
         pytest.fail(fail_msg)
 
 
+def test_chain_isolate(chain, owner, contract, accounts):
+    """
+    Show we integrate with `chain.isolate()` well
+    (similar to `test_restore()`).
+    """
+    instance = contract.deploy(123, sender=owner)
+    state = instance.myNumber()
+    height = chain.blocks.height
+    nonce = owner.nonce
+    balance = owner.balance
+    timestamp = chain.blocks.head.timestamp
+
+    with chain.isolate():
+        # Wreck state.
+        chain.mine(5)
+        owner.transfer(accounts[1], 1)
+        instance.setNumber(321, sender=owner)
+        deployment = contract.deploy(555, sender=owner)
+
+    failing_tests = []
+    passing_tests = []
+
+    def run_test(name, act, expt):
+        result = passing_tests if act == expt else failing_tests
+        result.append(name)
+
+    run_test("CHAIN HEIGHT", chain.blocks.height, height)
+    run_test("ACCOUNT NONCE", owner.nonce, nonce)
+    run_test("ACCOUNT BALANCE", owner.balance, balance)
+    run_test("DEPLOYMENT CODE", bool(chain.provider.get_code(deployment.address)), False)
+    run_test("CONTRACT STATE", instance.myNumber(), state)
+    run_test("BLOCK TIMESTAMP", chain.blocks.head.timestamp, timestamp)
+
+    if failing_tests:
+        failing_tests_str = ", ".join(failing_tests)
+        fail_msg = f"State not restored: '{failing_tests_str}'."
+        pytest.fail(fail_msg)
+
+
 def test_estimate_gas_cost(chain, owner, contract_instance):
     tx = contract_instance.setNumber.as_transaction(123, sender=owner)
     actual = chain.provider.estimate_gas_cost(tx)
