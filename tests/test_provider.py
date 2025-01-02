@@ -1,3 +1,5 @@
+import time
+
 import pytest
 from ape import reverts
 from ape_ethereum.ecosystem import Block
@@ -287,12 +289,19 @@ def test_set_timestamp(chain):
     start_ts = chain.blocks.head.timestamp
     new_timestamp = start_ts + 2500
     chain.provider.set_timestamp(new_timestamp)
+
+    # Show that time is froze after setting the timestamp.
+    time.sleep(2)
+    assert chain.pending_timestamp == new_timestamp
+
+    # After mining, the timestamp is no longer frozen but it
+    # MUST stay in the future passed the point when it was frozen.
     chain.provider.mine()
-    actual = chain.blocks.head.timestamp
-    expected = start_ts + 2500
-    if actual != expected:
-        diff = abs(actual - expected)
-        pytest.fail(f"Off by {diff}")
+    time.sleep(2)
+    ts = chain.pending_timestamp
+    assert ts > new_timestamp  # Is passed (not behind!) the time when it was frozen.
+    time.sleep(2)
+    assert chain.pending_timestamp > ts  # No longer frozen!
 
 
 def test_mine(chain):

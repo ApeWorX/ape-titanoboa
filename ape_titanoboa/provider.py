@@ -58,6 +58,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
     _blocks: list[dict] = []
 
     # Time.
+    # Used when `set_timestamp()` is called.
+    _pending_timestamp: Optional[int] = None
+    # Used when timestamp was set but then mined to keep us in the future.
     _timestamp_offset: int = 0
     _execution_timestamp: Optional[int] = None  # Used when auto mine is off.
 
@@ -116,9 +119,16 @@ class BaseTitanoboaProvider(TestProviderAPI):
     @property
     def pending_timestamp(self) -> int:
         if self._execution_timestamp is not None:
+            # Use the same time from last execution (so it retains in the block).
             return self._execution_timestamp
 
-        # Pending timestamp as normal.
+        elif self._pending_timestamp is not None:
+            # Time is frozen (via `set_timestamp()`).
+            return self._pending_timestamp
+
+        # NOTE: self._timestamp_offset is > 0 when set_timestamp has
+        #   been called and we have since mined the block using the
+        #   frozen time. This keeps us passed that point.
         return int(time.time()) + self._timestamp_offset
 
     def connect(self):
@@ -296,6 +306,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         # Set block.timestamp/number for execution. This must be the
         # same during execution as it will be in the block.
         execution_timestamp = self.pending_timestamp
+        self._pending_timestamp = None
         new_block_number = self.env.evm.patch.block_number + 1
         self.env.evm.patch.timestamp = execution_timestamp
         self.env.evm.patch.block_number = new_block_number
@@ -367,7 +378,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         # Prepare new block/transaction.
         if self._auto_mine:
             # Advance the chain.
-            self._blocks.append({"ts": execution_timestamp, "ts_offset": self._timestamp_offset})
+            self._blocks.append({"ts": execution_timestamp})
             self._canonical_transactions[txn_hash] = data
         else:
             # Will become canon once `self.mine()` is called.
@@ -407,16 +418,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
         if block_number < len(self._blocks):
             old_block = self._blocks[block_number]
             self.env.evm.patch.timestamp = old_block["ts"]
-            self._timestamp_offset = old_block["ts_offset"]
             new_height = block_number + 1
             self._blocks = self._blocks[:new_height]
 
         self._nonces = state["nonces"]
 
     def set_timestamp(self, new_timestamp: int):
-        current_timestamp = self.pending_timestamp
-        difference = new_timestamp - current_timestamp
-        self._timestamp_offset += difference
+        self._pending_timestamp = new_timestamp
 
     def mine(self, num_blocks: int = 1):
         if self._pending_transactions:
@@ -434,7 +442,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
             #   set before executing any EVM code (transactions), so it is the same
             #   in the block as it was when executed.
             timestamp = self.pending_timestamp
-            self._blocks.append({"ts": timestamp, "ts_offset": self._timestamp_offset})
+
+            if self._pending_timestamp is not None:
+                # Unfreeze time.
+                self._timestamp_offset = timestamp - int(time.time())
+                self._pending_timestamp = None
+
+            self._blocks.append({"ts": timestamp})
             self.env.evm.patch.block_number += 1
             self.env.evm.patch.timestamp = timestamp
 
