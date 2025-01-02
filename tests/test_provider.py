@@ -312,7 +312,7 @@ def test_trace(contract_instance, owner):
     assert call_tree_node is not None
 
 
-def test_account_impersonation(contract, contract_instance, owner, accounts):
+def test_account_impersonation(contract, contract_instance, owner, accounts, chain):
     """
     Ensuring the boa integration works with an account-impersonation flow.
     """
@@ -321,6 +321,12 @@ def test_account_impersonation(contract, contract_instance, owner, accounts):
     receipt = contract_instance.setBalance(owner, 0, sender=impersonated_account)
     assert receipt.sender == contract_instance.address
 
+    # Getting a past receipt.
+    chain.mine()
+    past_receipt = chain.provider.get_receipt(receipt.txn_hash)
+    assert past_receipt.txn_hash == receipt.txn_hash
+
+    # Deploy.
     new_contract = contract.deploy(555, sender=impersonated_account)
     tx = new_contract.setNumber(556, sender=impersonated_account)
     assert tx.sender == impersonated_account.address
