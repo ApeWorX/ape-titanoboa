@@ -223,7 +223,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         elif block_id == "latest":
             header = self.env.evm.chain.get_canonical_head()
-            block_number = len(self._blocks) - 1
+            block_number = self.env.evm.patch.block_number
             timestamp = self._blocks[block_number]["ts"]
 
         elif block_id == "pending":
@@ -440,7 +440,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         block_number = state["block_number"]
         self.env.evm.patch.block_number = block_number
 
-        if block_number < len(self._blocks):
+        if block_number <= self.env.evm.patch.block_number:
             old_block = self._blocks[block_number]
             self.env.evm.patch.timestamp = old_block["ts"]
             new_height = block_number + 1
