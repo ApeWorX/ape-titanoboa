@@ -189,11 +189,9 @@ class BaseTitanoboaProvider(TestProviderAPI):
             "to": receiver_bytes,
             "value": txn.value,
         }
-        evm_tx = self.env.evm.chain.create_unsigned_transaction(**evm_tx_data)
         sender_bytes = HexBytes(txn.sender) if txn.sender else ZERO_ADDRESS
-        spoof_tx = SpoofTransaction(evm_tx, from_=sender_bytes)
         try:
-            return self.env.evm.chain.estimate_gas(spoof_tx)
+            return self._estimate_spoof_transaction(evm_tx_data, sender_bytes)
         except ValidationError as err:
             # TODO: Figure out why this happens...
             if match := re.match(
@@ -201,11 +199,14 @@ class BaseTitanoboaProvider(TestProviderAPI):
             ):
                 expected = int(match.groups()[0])
                 evm_tx_data["nonce"] = expected
-                evm_tx = self.env.evm.chain.create_unsigned_transaction(**evm_tx_data)
-                spoof_tx = SpoofTransaction(evm_tx, from_=sender_bytes)
-                return self.env.evm.chain.estimate_gas(spoof_tx)
+                return self._estimate_spoof_transaction(evm_tx_data, sender_bytes)
 
             raise  # Raise the error as-is.
+
+    def _estimate_spoof_transaction(self, transaction_dict: dict, sender: bytes) -> int:
+        evm_tx = self.env.evm.chain.create_unsigned_transaction(**transaction_dict)
+        spoof_tx = SpoofTransaction(evm_tx, from_=sender)
+        return self.env.evm.chain.estimate_gas(spoof_tx)
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
         if isinstance(block_id, int):
