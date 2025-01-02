@@ -333,6 +333,13 @@ def test_account_impersonation(contract, contract_instance, owner, accounts, cha
     assert new_contract.myNumber() == 556
     assert len(tx.logs) > 0
 
+    # Return value (tracing).
+    actual_returnvalue = tx.return_value
+    expected_returnvalue = 561  # 556 + 5
+    assert actual_returnvalue == expected_returnvalue
+    assert chain.provider.get_receipt(tx.txn_hash).return_value == expected_returnvalue
+
+    # Revert detection.
     with reverts("!authorized"):
         contract_instance.setNumber(55, sender=impersonated_account)
 
