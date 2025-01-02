@@ -290,18 +290,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def get_transactions_by_block(self, block_id: "BlockID") -> Iterator["TransactionAPI"]:
         block = self.get_block(block_id)
         if block.number is not None:
-            yield from self._get_transactions_by_block_number(block.number)  # type: ignore
-
-    def _get_transactions_by_block_number(self, number: int) -> Iterator["TransactionAPI"]:
-        for data in self._canonical_transactions.values():
-            if data["block_number"] > number:
-                # perf: exit early if we have exceeded the give number.
-                return
-
-            # For some reason, transaction API expects bytes.
-            data["txn_hash"] = HexBytes(data["txn_hash"])
-
-            yield BoaTransaction(**data)
+            for txn_hash in self._blocks[block.number].get("txns", []):
+                data = self._canonical_transactions[txn_hash]
+                data["txn_hash"] = HexBytes(data["txn_hash"])
+                yield BoaTransaction(**data)
 
     def prepare_transaction(self, txn: "TransactionAPI") -> "TransactionAPI":
         txn.max_fee = 0
@@ -401,7 +393,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
         # Prepare new block/transaction.
         if self._auto_mine:
             # Advance the chain.
-            self._blocks.append({"ts": execution_timestamp})
+            self._blocks.append({"ts": execution_timestamp, "txns": [txn_hash]})
             self._canonical_transactions[txn_hash] = data
         else:
             # Will become canon once `self.mine()` is called.
@@ -436,12 +428,20 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self.env.evm.revert(snapshot_id)
         state = self._snapshot_state.pop(snapshot_id)
         block_number = state["block_number"]
+        current_block_number = self.env.evm.patch.block_number
         self.env.evm.patch.block_number = block_number
 
         if block_number <= self.env.evm.patch.block_number:
             old_block = self._blocks[block_number]
             self.env.evm.patch.timestamp = old_block["ts"]
             new_height = block_number + 1
+
+            # Clear transactions.
+            for block_to_remove in range(new_height, current_block_number):
+                for transaction_hash in self._blocks[block_to_remove].get("txns", []):
+                    self._canonical_transactions.pop(transaction_hash, None)
+
+            # Clear blocks.
             self._blocks = self._blocks[:new_height]
 
         self._nonces = state["nonces"]
@@ -457,9 +457,12 @@ class BaseTitanoboaProvider(TestProviderAPI):
             # Reset so the next execution-set uses the real pending timestamp.
             self._execution_timestamp = None
 
-        self._advance_chain(blocks=num_blocks)
+        self._advance_chain(
+            blocks=num_blocks, transaction_hashes=list(self._pending_transactions.keys())
+        )
+        self._pending_transactions = {}
 
-    def _advance_chain(self, blocks: int = 1):
+    def _advance_chain(self, blocks: int = 1, transaction_hashes: Optional[list] = None):
         for _ in range(blocks):
             # NOTE: auto-mine is off, the pending timestamp refers to the timestamp
             #   set before executing any EVM code (transactions), so it is the same
@@ -471,7 +474,11 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 self._timestamp_offset = timestamp - int(time.time())
                 self._pending_timestamp = None
 
-            self._blocks.append({"ts": timestamp})
+            new_block: dict = {"ts": timestamp}
+            if transaction_hashes:
+                new_block["txns"] = transaction_hashes
+
+            self._blocks.append(new_block)
             self.env.evm.patch.block_number += 1
             self.env.evm.patch.timestamp = timestamp
 

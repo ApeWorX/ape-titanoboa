@@ -127,8 +127,8 @@ def test_get_transactions_by_block(contract_instance, owner, chain):
 
     for block_id in ("latest", latest_block.number, latest_block.hash):
         actual = list(chain.provider.get_transactions_by_block(block_id))
-        assert len(actual) >= 1
 
+    assert len(actual) == 1
     assert to_hex(actual[-1].txn_hash) == tx.txn_hash
 
 
@@ -196,7 +196,9 @@ def test_restore(chain, owner, contract, accounts):
 
     # Wreck state.
     chain.mine(5)
-    owner.transfer(accounts[1], 1)
+    tx = owner.transfer(accounts[1], 1)
+    txn_hash = tx.txn_hash
+    assert chain.provider.get_receipt(txn_hash)  # This works now, but shouldn't after restore.
     instance.setNumber(321, sender=owner)
     deployment = contract.deploy(555, sender=owner)
 
@@ -216,6 +218,10 @@ def test_restore(chain, owner, contract, accounts):
     run_test("DEPLOYMENT CODE", bool(chain.provider.get_code(deployment.address)), False)
     run_test("CONTRACT STATE", instance.myNumber(), state)
     run_test("BLOCK TIMESTAMP", chain.blocks.head.timestamp, timestamp)
+
+    # Ensure the transaction made during "wrecking state" is no longer found.
+    with pytest.raises(TransactionNotFoundError):
+        _ = chain.provider.get_receipt(txn_hash)
 
     if failing_tests:
         failing_tests_str = ", ".join(failing_tests)
