@@ -21,7 +21,7 @@ from eth_abi import decode
 from eth_pydantic_types import HexBytes
 from eth_utils import ValidationError, to_hex
 
-from ape_titanoboa.config import BoaForkConfig
+from ape_titanoboa.config import BoaForkConfig, ForkBlockIdentifier
 from ape_titanoboa.trace import BoaTrace
 from ape_titanoboa.transactions import BoaReceipt, BoaTransaction
 from ape_titanoboa.utils import convert_boa_log
@@ -225,7 +225,10 @@ class BaseTitanoboaProvider(TestProviderAPI):
         elif block_id == "latest":
             header = self.env.evm.chain.get_canonical_head()
             block_number = self.env.evm.patch.block_number
-            timestamp = self._blocks[block_number]["ts"]
+            try:
+                timestamp = self._blocks[block_number]["ts"]
+            except IndexError:
+                raise BlockNotFoundError(block_id)
 
         elif block_id == "pending":
             header = self.env.evm.chain.get_block().header
@@ -432,13 +435,18 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self.env.evm.patch.block_number = block_number
 
         if block_number <= self.env.evm.patch.block_number:
-            old_block = self._blocks[block_number]
-            self.env.evm.patch.timestamp = old_block["ts"]
+            old_block = self.get_block(block_number)
+            self.env.evm.patch.timestamp = old_block.timestamp
             new_height = block_number + 1
 
             # Clear transactions.
             for block_to_remove in range(new_height, current_block_number):
-                for transaction_hash in self._blocks[block_to_remove].get("txns", []):
+                try:
+                    block = self._blocks[block_to_remove]
+                except IndexError:
+                    continue
+
+                for transaction_hash in block.get("txns", []):
                     self._canonical_transactions.pop(transaction_hash, None)
 
             # Clear blocks.
@@ -590,7 +598,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
             return upstream_provider.http_uri
 
     @property
-    def block_identifier(self) -> Optional["BlockID"]:
+    def block_identifier(self) -> ForkBlockIdentifier:
         return self.fork_config.get("block_identifier")
 
     @cached_property
@@ -603,6 +611,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         block = self.forked_block_start
         self.env.evm.patch.block_number = block.number
         self.env.evm.patch.timestamp = block.timestamp
+        self._blocks.append({"ts": block.timestamp})
 
     def disconnect(self):
         self.fork.__exit__()
@@ -626,6 +635,10 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
                 return upstream_provider.get_block(result.number)
 
         return result
+
+    def restore(self, snapshot_id: "SnapshotID"):
+        # TODO
+        return
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         with self._forked_connection as provider:

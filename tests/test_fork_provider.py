@@ -34,3 +34,10 @@ def test_get_block(chain):
 
     block = chain.provider.get_block(3)
     assert block.timestamp == 1634951317
+
+
+def test_block_identifier(chain):
+    actual = chain.provider.block_identifier
+    expected = 7341111  # From configuration.
+    breakpoint()
+    assert actual == expected

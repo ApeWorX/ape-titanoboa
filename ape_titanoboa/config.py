@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional, Union
 
 from ape.api.config import PluginConfig
 from ape.types import BlockID
@@ -7,6 +7,7 @@ from ape.types import BlockID
 #   can use `ape.utils.testing.DEFAULT_TEST_CHAIN_ID`, but for
 #   now we want this to be the same as ape-foundry's default.
 DEFAULT_TEST_CHAIN_ID = 31337
+ForkBlockIdentifier = Union[BlockID, Literal["safe"]]
 
 
 class BoaForkConfig(PluginConfig):
@@ -21,9 +22,10 @@ class BoaForkConfig(PluginConfig):
     for that network.
     """
 
-    block_identifier: Optional[BlockID] = None
+    block_identifier: ForkBlockIdentifier = "safe"
     """
     The block ID, such as block number of hash, to fork from (recommended).
+    Defaults to the literal "safe" (same as boa).
     """
 
 
