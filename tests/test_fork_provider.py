@@ -45,3 +45,42 @@ def test_block_identifier(chain, project):
     # Test the default.
     with project.temp_config(titanoboa={}):
         assert chain.provider.block_identifier == "safe"
+
+
+def test_deploy_contract(contract, owner):
+    instance = contract.deploy(123, sender=owner)
+    assert instance.address is not None
+    assert instance.contract_type is not None
+
+
+def test_send_transaction(chain, contract_instance, owner):
+    expected_block = chain.provider.get_block("pending")
+    tx = contract_instance.setNumber(321, sender=owner)
+    assert not tx.failed
+    assert tx.block_number == expected_block.number
+
+    # Show that state has changed.
+    assert contract_instance.myNumber() == 321
+
+    # Show the "new" pending block is expected (+1).
+    new_pending_block = chain.provider.get_block("pending")
+    assert new_pending_block.number == expected_block.number + 1
+    assert new_pending_block.timestamp >= expected_block.timestamp
+
+
+def test_send_call(contract_instance, owner):
+    result = contract_instance.myNumber()
+    assert result == 123
+
+
+def test_get_receipt(contract_instance, owner, chain):
+    tx = contract_instance.setNumber(321, sender=owner)
+    tx_hash = tx.txn_hash
+
+    actual = chain.provider.get_receipt(tx_hash)
+    assert actual.txn_hash == tx.txn_hash
+
+    # Get a historical receipt.
+    txn_hash = "0x68605140856c13038d325048c411aed98cc1eecc189f628a38edb597f6b9679e"
+    receipt = chain.provider.get_receipt(txn_hash)
+    assert receipt.txn_hash == txn_hash

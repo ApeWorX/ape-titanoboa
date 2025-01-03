@@ -243,24 +243,6 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         return self.get_block_by_hash(block_id)
 
-    def get_block_by_number(self, number: int) -> "BlockAPI":
-        try:
-            timestamp = self._blocks[number]["ts"]
-        except IndexError:
-            raise BlockNotFoundError(number)
-
-        return self._init_blockapi(self._reusable_header, number, timestamp)
-
-    def get_block_by_hash(self, block_hash: bytes) -> "BlockAPI":
-        block_index = self._get_block_index_from_hash(block_hash)
-        try:
-            timestamp = self._blocks[block_index]["ts"]
-        except IndexError:
-            raise BlockNotFoundError(HexBytes(block_hash))
-
-        # Block index is the same as block number for local networks.
-        return self._init_blockapi(self._reusable_header, block_index, timestamp)
-
     def _get_block_index_from_hash(self, block_hash: bytes) -> int:
         # NOTE: This is the block **index** because in the case of forked chains,
         #   the block number is much higher than the index.
@@ -586,6 +568,24 @@ class TitanoboaProvider(BaseTitanoboaProvider):
         self.boa.env.evm.patch.chain_id = self.settings.chain_id
         return self.boa.env
 
+    def get_block_by_number(self, number: int) -> "BlockAPI":
+        try:
+            timestamp = self._blocks[number]["ts"]
+        except IndexError:
+            raise BlockNotFoundError(number)
+
+        return self._init_blockapi(self._reusable_header, number, timestamp)
+
+    def get_block_by_hash(self, block_hash: bytes) -> "BlockAPI":
+        block_index = self._get_block_index_from_hash(block_hash)
+        try:
+            timestamp = self._blocks[block_index]["ts"]
+        except IndexError:
+            raise BlockNotFoundError(HexBytes(block_hash))
+
+        # Block index is the same as block number for local networks.
+        return self._init_blockapi(self._reusable_header, block_index, timestamp)
+
 
 class ForkTitanoboaProvider(BaseTitanoboaProvider):
     """
@@ -693,3 +693,12 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         with self._upstream_connection as provider:
             return provider.make_request(rpc, parameters=parameters)
+
+    def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
+        if data := self._canonical_transactions.get(txn_hash):
+            # Transaction made with this plugin (boa).
+            return BoaReceipt(**data)
+
+        # Historical transaction.
+        with self._upstream_connection as upstream_provider:
+            return upstream_provider.get_receipt(txn_hash)
