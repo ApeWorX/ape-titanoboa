@@ -552,7 +552,7 @@ class TitanoboaProvider(BaseTitanoboaProvider):
 
     @cached_property
     def env(self) -> "Env":
-        self.boa.env.evm.patch.chain_id = self.config.chain_id
+        self.boa.env.evm.patch.chain_id = self.settings.chain_id
         return self.boa.env
 
 
@@ -572,10 +572,10 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         block_id = self.block_identifier or "safe"
         return fork(self.fork_url, block_identifier=block_id, allow_dirty=True)
 
-    @cached_property
+    @property
     def fork_config(self) -> "BoaForkConfig":
         return (
-            self.config.fork.get(self.network.ecosystem.name, {}).get(
+            self.settings.fork.get(self.network.ecosystem.name, {}).get(
                 self.forked_network.upstream_network.name
             )
             or BoaForkConfig()

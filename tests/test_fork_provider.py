@@ -36,7 +36,11 @@ def test_get_block(chain):
     assert block.timestamp == 1634951317
 
 
-def test_block_identifier(chain):
+def test_block_identifier(chain, project):
     actual = chain.provider.block_identifier
     expected = 7341111  # From configuration.
     assert actual == expected
+
+    # Test the default.
+    with project.temp_config(titanoboa={}):
+        assert chain.provider.block_identifier == "safe"
