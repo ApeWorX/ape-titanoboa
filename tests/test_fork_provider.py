@@ -39,5 +39,4 @@ def test_get_block(chain):
 def test_block_identifier(chain):
     actual = chain.provider.block_identifier
     expected = 7341111  # From configuration.
-    breakpoint()
     assert actual == expected

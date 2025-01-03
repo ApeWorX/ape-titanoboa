@@ -21,7 +21,7 @@ include = '\.pyi?$'
 contracts_folder = "tests/contracts"
 
 [tool.ape.titanoboa.fork.ethereum.sepolia]
-upstream_provider = "node"
+upstream_provider = "alchemy"
 block_identifier = 7341111
 
 [tool.ape.ethereum.local]
