@@ -84,3 +84,9 @@ def test_get_receipt(contract_instance, owner, chain):
     txn_hash = "0x68605140856c13038d325048c411aed98cc1eecc189f628a38edb597f6b9679e"
     receipt = chain.provider.get_receipt(txn_hash)
     assert receipt.txn_hash == txn_hash
+
+
+def test_chain_id(chain):
+    actual = chain.provider.chain_id
+    expected = 11155111  # Sepolia
+    assert actual == expected

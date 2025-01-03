@@ -243,6 +243,12 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
         return self.get_block_by_hash(block_id)
 
+    def get_block_by_number(self, number: int) -> "BlockAPI":
+        raise NotImplementedError("Must be implemented in sub-class,")
+
+    def get_block_by_hash(self, block_hash: bytes) -> "BlockAPI":
+        raise NotImplementedError("Must be implemented in sub-class,")
+
     def _get_block_index_from_hash(self, block_hash: bytes) -> int:
         # NOTE: This is the block **index** because in the case of forked chains,
         #   the block number is much higher than the index.
@@ -641,12 +647,24 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         with self._upstream_connection as upstream_provider:
             return upstream_provider.get_block(self.block_identifier)
 
+    @cached_property
+    def _upstream_chain_id(self) -> int:
+        with self._upstream_connection as upstream_provider:
+            return upstream_provider.chain_id
+
+    @property
+    def chain_id(self) -> int:
+        # TODO: Support having a different chain ID than the upstream
+        #   (with the default being the upstream).
+        return self._upstream_chain_id
+
     def connect(self):
         self.fork.__enter__()
         block = self.forked_block_start
         self.env.evm.patch.block_number = block.number
         self.env.evm.patch.timestamp = block.timestamp
         self._blocks.append({"ts": block.timestamp})
+        self.env.evm.patch.chain_id = self._upstream_chain_id
 
     def disconnect(self):
         self.fork.__exit__()
