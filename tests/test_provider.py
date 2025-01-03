@@ -4,6 +4,7 @@ import pytest
 from ape import reverts
 from ape.exceptions import BlockNotFoundError, TransactionNotFoundError
 from eth_utils import to_hex
+
 from ape_titanoboa.config import DEFAULT_TEST_CHAIN_ID
 
 
@@ -346,21 +347,27 @@ def test_account_impersonation(contract, contract_instance, owner, accounts, cha
 
 
 def test_set_timestamp(chain):
+    time_at_start = int(time.time())
     start_ts = chain.blocks.head.timestamp
     new_timestamp = start_ts + 2500
     chain.provider.set_timestamp(new_timestamp)
 
+    def wait_for_time_to_increase(start_time):
+        now = int(time.time())
+        while now <= start_time:
+            now = int(time.time())
+
     # Show that time is froze after setting the timestamp.
-    time.sleep(2)
+    wait_for_time_to_increase(time_at_start)
     assert chain.pending_timestamp == new_timestamp
 
     # After mining, the timestamp is no longer frozen but it
     # MUST stay in the future passed the point when it was frozen.
     chain.provider.mine()
-    time.sleep(2)
+    wait_for_time_to_increase(int(time.time()))
     ts = chain.pending_timestamp
     assert ts > new_timestamp  # Is passed (not behind!) the time when it was frozen.
-    time.sleep(2)
+    wait_for_time_to_increase(int(time.time()))
     assert chain.pending_timestamp > ts  # No longer frozen!
 
 
