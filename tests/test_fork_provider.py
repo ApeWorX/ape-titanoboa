@@ -32,6 +32,7 @@ def test_get_block(chain):
     block = chain.provider.get_block(7341116)
     assert block.number == 7341116
 
+    # Historical block.
     block = chain.provider.get_block(3)
     assert block.timestamp == 1634951317
 

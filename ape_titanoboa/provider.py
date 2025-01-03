@@ -123,6 +123,22 @@ class BaseTitanoboaProvider(TestProviderAPI):
         return hd_path if "{}" in hd_path or "{0}" in hd_path else f"{hd_path.rstrip('/')}/{{}}"
 
     @property
+    def earliest_block(self) -> "BlockAPI":
+        return self.get_block_by_number(0)
+
+    @property
+    def latest_block(self) -> "BlockAPI":
+        latest_block_number = self.env.evm.patch.block_number
+        return self.get_block_by_number(latest_block_number)
+
+    @property
+    def pending_block(self) -> "BlockAPI":
+        header = self.env.evm.chain.get_block().header
+        block_number = self.env.evm.patch.block_number + 1
+        timestamp = self.pending_timestamp
+        return self._init_blockapi(header, block_number, timestamp)
+
+    @property
     def pending_timestamp(self) -> int:
         if self._execution_timestamp is not None:
             # Use the same time from last execution (so it retains in the block).
@@ -144,6 +160,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
     @property
     def max_gas(self) -> int:
         return self.env.evm.get_gas_limit()
+
+    @cached_property
+    def _reusable_header(self):
+        # NOTE: We use this header only as a base,
+        #   this chain is all very made-up. It being
+        #   the canonical-head is irrelevant here.
+        return self.env.evm.chain.get_canonical_head()
 
     def connect(self):
         _ = self.env
@@ -210,54 +233,41 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def get_block(self, block_id: "BlockID") -> BlockAPI:
         if isinstance(block_id, int):
-            header = self.env.evm.chain.get_canonical_head()
-            block_number = block_id
-            try:
-                timestamp = self._blocks[block_number]["ts"]
-            except IndexError:
-                raise BlockNotFoundError(block_id)
-
+            return self.get_block_by_number(block_id)
         elif block_id == "earliest":
-            header = self.env.evm.chain.get_canonical_head()
-            block_number = 0
-            timestamp = self._blocks[0]["ts"]
-
+            return self.earliest_block
         elif block_id == "latest":
-            header = self.env.evm.chain.get_canonical_head()
-            block_number = self.env.evm.patch.block_number
-            try:
-                timestamp = self._blocks[block_number]["ts"]
-            except IndexError:
-                raise BlockNotFoundError(block_id)
-
+            return self.latest_block
         elif block_id == "pending":
-            header = self.env.evm.chain.get_block().header
-            block_number = self.env.evm.patch.block_number + 1
-            timestamp = self.pending_timestamp
+            return self.pending_block
 
-        else:
-            # By hash.
-            header = self.env.evm.chain.get_canonical_head()
-            block_number = int(to_hex(block_id), 16) - int(to_hex(header.hash), 16)
-            try:
-                timestamp = self._blocks[block_number]["ts"]
-            except IndexError:
-                raise BlockNotFoundError(block_id)
+        return self.get_block_by_hash(block_id)
 
-        # NOTE: If we don't do this, all the hashes are the same, and that
-        #   creates problems in Ape.
-        fake_hash = HexBytes(int(to_hex(header.hash), 16) + block_number)
+    def get_block_by_number(self, number: int) -> "BlockAPI":
+        try:
+            timestamp = self._blocks[number]["ts"]
+        except IndexError:
+            raise BlockNotFoundError(number)
 
-        return self.network.ecosystem.decode_block(
-            {
-                "gasLimit": header.gas_limit,
-                "gasUsed": header.gas_used,
-                "hash": fake_hash,
-                "number": block_number,
-                "parentHash": header.parent_hash,
-                "timestamp": timestamp,
-            }
-        )
+        return self._init_blockapi(self._reusable_header, number, timestamp)
+
+    def get_block_by_hash(self, block_hash: bytes) -> "BlockAPI":
+        block_index = self._get_block_index_from_hash(block_hash)
+        try:
+            timestamp = self._blocks[block_index]["ts"]
+        except IndexError:
+            raise BlockNotFoundError(HexBytes(block_hash))
+
+        # Block index is the same as block number for local networks.
+        return self._init_blockapi(self._reusable_header, block_index, timestamp)
+
+    def _get_block_index_from_hash(self, block_hash: bytes) -> int:
+        # NOTE: This is the block **index** because in the case of forked chains,
+        #   the block number is much higher than the index.
+        header = self._reusable_header
+
+        # NOTE: Hashes are made up from the reusable hash plus the block number
+        return int(to_hex(block_hash), 16) - int(to_hex(header.hash), 16)
 
     def send_call(
         self,
@@ -435,12 +445,17 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self.env.evm.patch.block_number = block_number
 
         if block_number <= self.env.evm.patch.block_number:
-            old_block = self.get_block(block_number)
-            self.env.evm.patch.timestamp = old_block.timestamp
+            try:
+                old_block = self._blocks[block_number]
+            except IndexError:
+                pass
+            else:
+                self.env.evm.patch.timestamp = old_block["ts"]
+
             new_height = block_number + 1
 
             # Clear transactions.
-            for block_to_remove in range(new_height, current_block_number):
+            for block_to_remove in range(new_height, current_block_number + 1):
                 try:
                     block = self._blocks[block_to_remove]
                 except IndexError:
@@ -483,12 +498,13 @@ class BaseTitanoboaProvider(TestProviderAPI):
                 self._pending_timestamp = None
 
             new_block: dict = {"ts": timestamp}
-            if transaction_hashes:
-                new_block["txns"] = transaction_hashes
-
             self._blocks.append(new_block)
             self.env.evm.patch.block_number += 1
             self.env.evm.patch.timestamp = timestamp
+
+        # Hashes only appear in last block added.
+        if transaction_hashes:
+            self._blocks[-1]["txns"] = transaction_hashes
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
@@ -544,6 +560,21 @@ class BaseTitanoboaProvider(TestProviderAPI):
         # NOTE: All accounts are basically unlocked in boa.
         return True
 
+    def _init_blockapi(self, header, block_number: int, timestamp: int) -> "BlockAPI":
+        # NOTE: If we don't do this, all the hashes are the same, and that
+        #   creates problems in Ape.
+        fake_hash = HexBytes(int(to_hex(header.hash), 16) + block_number)
+        return self.network.ecosystem.decode_block(
+            {
+                "gasLimit": header.gas_limit,
+                "gasUsed": header.gas_used,
+                "hash": fake_hash,
+                "number": block_number,
+                "parentHash": header.parent_hash,
+                "timestamp": timestamp,
+            }
+        )
+
 
 class TitanoboaProvider(BaseTitanoboaProvider):
     """
@@ -586,7 +617,11 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         return self.network  # type: ignore
 
     @property
-    def _forked_connection(self) -> "ProviderContextManager":
+    def earliest_block(self) -> "BlockAPI":
+        return self._get_block_from_upstream("earliest")
+
+    @property
+    def _upstream_connection(self) -> "ProviderContextManager":
         if provider := self.fork_config.upstream_provider:
             return self.forked_network.upstream_network.use_provider(provider)
         else:
@@ -594,17 +629,17 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
 
     @cached_property
     def fork_url(self) -> str:
-        with self._forked_connection as upstream_provider:
+        with self._upstream_connection as upstream_provider:
             return upstream_provider.http_uri
 
     @property
     def block_identifier(self) -> ForkBlockIdentifier:
-        return self.fork_config.get("block_identifier")
+        return self.fork_config.block_identifier
 
     @cached_property
     def forked_block_start(self) -> "BlockAPI":
-        with self._forked_connection as upstream_provider:
-            return upstream_provider.get_block(self.block_identifier or "latest")
+        with self._upstream_connection as upstream_provider:
+            return upstream_provider.get_block(self.block_identifier)
 
     def connect(self):
         self.fork.__enter__()
@@ -620,26 +655,41 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         for cached_prop in ("fork", "fork_url", "fork_config"):
             self.__dict__.pop(cached_prop, None)
 
-    def get_block(self, block_id: "BlockID") -> BlockAPI:
-        try:
-            result = super().get_block(block_id)
-        except Exception:
-            # Try upstream.
-            with self._forked_connection as upstream_provider:
-                return upstream_provider.get_block(block_id)
-
+    def get_block_by_number(self, number: int) -> "BlockAPI":
         start_number = self.forked_block_start.number or 0
-        if result.number is not None and result.number <= start_number:
-            # Correct data such as timestamp, which may be necessary for some tests.
-            with self._forked_connection as upstream_provider:
-                return upstream_provider.get_block(result.number)
+        if number < start_number:
+            # Is before fork.
+            return self._get_block_from_upstream(number)
 
-        return result
+        # Is since fork.
+        return self._get_block_since_fork_by_number(number)
 
-    def restore(self, snapshot_id: "SnapshotID"):
-        # TODO
-        return
+    def _get_block_since_fork_by_number(self, number: int) -> "BlockAPI":
+        start_number = self.forked_block_start.number or 0
+        index = number - start_number
+        try:
+            timestamp = self._blocks[index]["ts"]
+        except IndexError:
+            # NOTE: Ensure we raise error with the *given* number.
+            raise BlockNotFoundError(number)
+
+        return self._init_blockapi(self._reusable_header, number, timestamp)
+
+    def get_block_by_hash(self, block_hash: bytes) -> "BlockAPI":
+        index = self._get_block_index_from_hash(block_hash)
+
+        if index >= 0 or index < len(self._blocks):
+            block_number = (self.forked_block_start.number or 0) + index
+            return self._init_blockapi(
+                self._reusable_header, block_number, self._blocks[index]["ts"]
+            )
+
+        return self._get_block_from_upstream(block_hash)
+
+    def _get_block_from_upstream(self, block_id: "BlockID") -> "BlockAPI":
+        with self._upstream_connection as upstream_provider:
+            return upstream_provider.get_block(block_id)
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
-        with self._forked_connection as provider:
+        with self._upstream_connection as provider:
             return provider.make_request(rpc, parameters=parameters)
