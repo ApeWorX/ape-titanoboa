@@ -1,30 +1,37 @@
 import time
 
 import pytest
-from ape import reverts
-from ape.exceptions import BlockNotFoundError, TransactionNotFoundError
+from ape import Contract, reverts
+from ape.exceptions import BlockNotFoundError, ContractNotFoundError, TransactionNotFoundError
 from eth_utils import to_hex
 
 from ape_titanoboa.config import DEFAULT_TEST_CHAIN_ID
 
 
-@pytest.fixture(scope="module", autouse=True)
-def sepolia_fork(networks):
-    with networks.ethereum.local.use_provider("boa") as provider:
-        yield provider
-
-
-def test_is_connected(chain):
+def test_is_connected(chain, networks):
     assert chain.provider.is_connected
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        assert chain.provider.is_connected
 
 
-def test_deploy_contract(contract, owner):
+def test_deploy_contract(contract, owner, networks):
     instance = contract.deploy(123, sender=owner)
     assert instance.address is not None
     assert instance.contract_type is not None
 
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        with pytest.raises(ContractNotFoundError):
+            assert instance.myNumber()
 
-def test_send_transaction(chain, contract_instance, owner):
+        fork_instance = contract.deploy(123, sender=owner)
+        assert fork_instance.address is not None
+        assert fork_instance.contract_type is not None
+
+    # Contract is found again after leaving the forked context.
+    assert instance.myNumber() == 123
+
+
+def test_send_transaction(chain, contract_instance, contract, owner, networks):
     expected_block = chain.provider.get_block("pending")
     tx = contract_instance.setNumber(321, sender=owner)
     assert not tx.failed
@@ -38,25 +45,85 @@ def test_send_transaction(chain, contract_instance, owner):
     assert new_pending_block.number == expected_block.number + 1
     assert new_pending_block.timestamp >= expected_block.timestamp
 
+    # Show we can transact on forked networks too.
+    block_id_from_config = 7341111
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        fork_contract_instance = contract.deploy(123, sender=owner)
+        tx = fork_contract_instance.setNumber(321, sender=owner)
+        assert tx.block_number >= block_id_from_config
 
-def test_send_call(contract_instance, owner):
+    # Show it goes back to the local block number.
+    tx = contract_instance.setNumber(321123, sender=owner)
+    assert tx.block_number < block_id_from_config
+
+
+def test_send_call(contract_instance, owner, contract, networks):
+    result = contract_instance.myNumber()
+    assert result == 123
+
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        fork_contract_instance = contract.deploy(111, sender=owner)
+        result = fork_contract_instance.myNumber()
+        assert result == 111
+
+        # Interact with apip Sepolia contract.
+        polyhedra = Contract("0x465C15e9e2F3837472B0B204e955c5205270CA9E")
+        assert polyhedra.name() == "tZKJ"
+
+    # Show it works the same back on local.
     result = contract_instance.myNumber()
     assert result == 123
 
 
-def test_get_receipt(contract_instance, owner, chain):
-    tx = contract_instance.setNumber(321, sender=owner)
-    tx_hash = tx.txn_hash
-
-    actual = chain.provider.get_receipt(tx_hash)
-    assert actual.txn_hash == tx.txn_hash
+def test_get_receipt(contract_instance, owner, chain, networks):
+    local_tx = contract_instance.setNumber(321, sender=owner)
+    actual = chain.provider.get_receipt(local_tx.txn_hash)
+    assert actual.txn_hash == local_tx.txn_hash
 
     # Show we get the correct error when the receipt is not found.
     with pytest.raises(TransactionNotFoundError):
         chain.provider.get_receipt("asdfasdfasdf")
 
+    # Get a sepolia receipt.
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        txn_hash = "0x68605140856c13038d325048c411aed98cc1eecc189f628a38edb597f6b9679e"
+        receipt = chain.provider.get_receipt(txn_hash)
+        assert receipt.txn_hash == txn_hash
 
-def test_AccountAPI_nonce(owner, contract):
+        # Ensure the local transaction we made isn't available.
+        with pytest.raises(TransactionNotFoundError):
+            _ = chain.provider.get_receipt(local_tx.txn_hash)
+
+        sepolia_tx = owner.transfer(owner, 0)
+        assert chain.provider.get_receipt(sepolia_tx.txn_hash).txn_hash == sepolia_tx.txn_hash
+
+    # Ensure the sepolia-fork transaction we made isn't available.
+    with pytest.raises(TransactionNotFoundError):
+        _ = chain.provider.get_receipt(sepolia_tx.txn_hash)
+
+    # Get a holesky receipt.
+    with networks.ethereum.holesky_fork.use_provider("boa"):
+        txn_hash = "0x611745e08130a55df98a3758ac6029fb68a60651dad15d6ee6435e457ac8ed34"
+        receipt = chain.provider.get_receipt(txn_hash)
+        assert receipt.txn_hash == txn_hash
+
+        # Ensure the local transaction we made isn't available.
+        with pytest.raises(TransactionNotFoundError):
+            _ = chain.provider.get_receipt(local_tx.txn_hash)
+
+        # Ensure the sepolia-fork transaction we made isn't available.
+        with pytest.raises(TransactionNotFoundError):
+            _ = chain.provider.get_receipt(sepolia_tx.txn_hash)
+
+        holesky_tx = owner.transfer(owner, 0)
+        assert chain.provider.get_receipt(holesky_tx.txn_hash).txn_hash == holesky_tx.txn_hash
+
+    # Ensure the holesky-fork transaction we made isn't available.
+    with pytest.raises(TransactionNotFoundError):
+        _ = chain.provider.get_receipt(holesky_tx.txn_hash)
+
+
+def test_AccountAPI_nonce(owner, contract, chain, networks):
     """
     Showing the integration with `AccountAPI.nonce` works
     (testing `TitanoboaProvider.get_nonce()` indirectly).
@@ -66,8 +133,26 @@ def test_AccountAPI_nonce(owner, contract):
 
     # Deploy (transact)
     contract.deploy(123, sender=owner)
+    local_nonce = owner.nonce
+    nonce_before_fork = start_nonce + 1
+    assert local_nonce == nonce_before_fork
 
-    assert owner.nonce == start_nonce + 1
+    # Local boa doesn't know Vitalik.
+    vitalik = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+    assert chain.provider.get_nonce(vitalik) == 0
+
+    with networks.ethereum.holesky_fork.use_provider("boa"):
+        # Transact so the nonce changes on the fork.
+        start_nonce = owner.nonce
+        owner.transfer(owner, 9)
+        assert owner.nonce == start_nonce + 1
+
+    with networks.ethereum.mainnet_fork.use_provider("boa"):
+        # Mainnet fork boa knows Vitalik's nonce.
+        assert chain.provider.get_nonce(vitalik) > 0
+
+    # Show the nonce is as it was.
+    assert owner.nonce == nonce_before_fork
 
 
 def test_ReceiptAPI_events(owner, contract_instance):
@@ -82,7 +167,7 @@ def test_ReceiptAPI_events(owner, contract_instance):
     assert actual[0].newNum == 321
 
 
-def test_get_block(chain):
+def test_get_block(chain, networks):
     # Earliest block (genesis).
     zero_block = chain.provider.get_block(0)
     earliest_block = chain.provider.get_block("earliest")
@@ -121,6 +206,22 @@ def test_get_block(chain):
     with pytest.raises(BlockNotFoundError):
         chain.provider.get_block(b"111111")
 
+    # Get blocks from sepolia.
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        block = chain.provider.get_block("latest")
+        assert block.number >= 7341111  # From configuration.
+
+        # Mine.
+        chain.provider.mine(5)
+        block = chain.provider.get_block("latest")
+        assert block.number >= 7341116
+        block = chain.provider.get_block(7341116)
+        assert block.number == 7341116
+
+        # Historical block.
+        block = chain.provider.get_block(3)
+        assert block.timestamp == 1634951317
+
 
 def test_get_transactions_by_block(contract_instance, owner, chain):
     tx = contract_instance.setNumber(321, sender=owner)
@@ -133,12 +234,18 @@ def test_get_transactions_by_block(contract_instance, owner, chain):
     assert to_hex(actual[-1].txn_hash) == tx.txn_hash
 
 
-def test_AccountAPI_balance(owner):
+def test_AccountAPI_balance(owner, networks):
     """
     Show the integration with `AccountAPI.balance` works
     (calls `TitanoboaProvider.get_balance()` under-the-hood.
     """
-    assert owner.balance > 0
+    balance = owner.balance
+    assert balance > 0
+    with networks.ethereum.mainnet_fork.use_provider("boa"):
+        assert owner.balance != balance
+
+    # Show it goes back after fork.
+    assert owner.balance == balance
 
 
 def test_ChainManager_mine(chain):
@@ -433,7 +540,28 @@ def test_onchain_timestamp(chain, contract_instance, owner):
         pytest.fail("Somehow went back in time after mining a new block.")
 
 
-def test_chain_id(chain):
+def test_chain_id(chain, networks):
     actual = chain.provider.chain_id
     expected = DEFAULT_TEST_CHAIN_ID
     assert actual == expected
+
+    with networks.ethereum.holesky_fork.use_provider("boa") as holesky_fork:
+        actual = holesky_fork.chain_id
+        expected = 17000  # Holesky
+        assert actual == expected
+
+    # Show it goes back.
+    actual = chain.provider.chain_id
+    expected = DEFAULT_TEST_CHAIN_ID
+    assert actual == expected
+
+
+def test_block_identifier(chain, project, networks):
+    with networks.ethereum.sepolia_fork.use_provider("boa"):
+        actual = chain.provider.block_identifier
+        expected = 7341111  # From configuration.
+        assert actual == expected
+
+        # Test the default.
+        with project.temp_config(titanoboa={}):
+            assert chain.provider.block_identifier == "safe"

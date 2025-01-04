@@ -9,6 +9,7 @@ extras_require = {
         "pytest-cov",  # Coverage analyzer plugin
         "hypothesis>=6.2.0,<7.0",  # Strategy-based fuzzer
         "ape-alchemy",  # More reliable upstream provider
+        "ape-etherscan",  # Needed for fetching a contract
         "ape-vyper>=0.8.8,<0.9",  # For compiling test contracts
     ],
     "lint": [

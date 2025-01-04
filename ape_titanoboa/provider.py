@@ -175,15 +175,24 @@ class BaseTitanoboaProvider(TestProviderAPI):
         self._blocks.append({"ts": self.env.evm.patch.timestamp})
         self.env.evm.patch.block_number = 0
 
+        if self._accounts:
+            # Accounts have already been accessed, maybe through pytest
+            # fixtures; and we have changed networks. We must ensure
+            # they are configured with a balance. Clearing them on
+            # disconnect does not work because they might be cached in pytest.
+            for acct in self._accounts.values():
+                self.env.set_balance(acct.address, self.apetest_config.balance)
+
     def disconnect(self):
-        self.__dict__.pop("env", None)
-        self._connected = False
         self.boa.reset_env()  # type: ignore
         self._blocks = []
         self._pending_timestamp = None
         self._timestamp_offset = 0
         self._canonical_transactions = {}
         self._pending_transactions = {}
+        self._nonces = {}
+        self._snapshot_state = {}
+        self._execution_timestamp = None
 
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
@@ -198,9 +207,6 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         raise NotImplementedError()
-
-    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
-        return self._nonces.get(address, 0)
 
     def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
         receiver_bytes = HexBytes(txn.receiver) if txn.receiver else ZERO_ADDRESS
@@ -427,7 +433,11 @@ class BaseTitanoboaProvider(TestProviderAPI):
     def restore(self, snapshot_id: "SnapshotID"):
         # Undoes any chain-state (e.g. deployments, storage, balances).
         self.env.evm.revert(snapshot_id)
-        state = self._snapshot_state.pop(snapshot_id)
+        try:
+            state = self._snapshot_state.pop(snapshot_id)
+        except KeyError:
+            return
+
         block_number = state["block_number"]
         current_block_number = self.env.evm.patch.block_number
         self.env.evm.patch.block_number = block_number
@@ -574,6 +584,9 @@ class TitanoboaProvider(BaseTitanoboaProvider):
         self.boa.env.evm.patch.chain_id = self.settings.chain_id
         return self.boa.env
 
+    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
+        return self._nonces.get(address, 0)
+
     def get_block_by_number(self, number: int) -> "BlockAPI":
         try:
             timestamp = self._blocks[number]["ts"]
@@ -597,6 +610,8 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     """
     The Boa-provider used for forked-networks.
     """
+
+    _upstream_blocks: dict["BlockID", "BlockAPI"] = {}
 
     @cached_property
     def env(self) -> "Env":
@@ -659,23 +674,35 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         return self._upstream_chain_id
 
     def connect(self):
+        self._connected = True
         self.fork.__enter__()
         block = self.forked_block_start
         self.env.evm.patch.block_number = block.number
         self.env.evm.patch.timestamp = block.timestamp
-        self._blocks.append({"ts": block.timestamp})
+        self._blocks = [{"ts": block.timestamp}]
         self.env.evm.patch.chain_id = self._upstream_chain_id
 
     def disconnect(self):
         self.fork.__exit__()
         super().disconnect()
 
-        for cached_prop in ("fork", "fork_url", "fork_config"):
-            self.__dict__.pop(cached_prop, None)
+    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
+        if address in self._nonces:
+            return self._nonces[address]
+
+        # Get the data from upstream.
+        with self._upstream_connection as upstream_provider:
+            nonce = upstream_provider.get_nonce(address)
+            self._nonces[address] = nonce
+
+        return nonce
 
     def get_block_by_number(self, number: int) -> "BlockAPI":
         start_number = self.forked_block_start.number or 0
-        if number < start_number:
+        if number == start_number:
+            return self.forked_block_start
+
+        elif number < start_number:
             # Is before fork.
             return self._get_block_from_upstream(number)
 
@@ -705,8 +732,14 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         return self._get_block_from_upstream(block_hash)
 
     def _get_block_from_upstream(self, block_id: "BlockID") -> "BlockAPI":
+        if block := self._upstream_blocks.get(block_id):
+            return block
+
         with self._upstream_connection as upstream_provider:
-            return upstream_provider.get_block(block_id)
+            upstream_block = upstream_provider.get_block(block_id)
+            # Cache for next time.
+            self._upstream_blocks[block_id] = upstream_block
+            return upstream_block
 
     def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
         with self._upstream_connection as provider:
@@ -714,9 +747,15 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
 
     def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
         if data := self._canonical_transactions.get(txn_hash):
-            # Transaction made with this plugin (boa).
-            return BoaReceipt(**data)
+            if isinstance(data, dict):
+                # Transaction made with this plugin (boa).
+                return BoaReceipt(**data)
+
+            # Is a cached transaction from upstream.
+            return data
 
         # Historical transaction.
         with self._upstream_connection as upstream_provider:
-            return upstream_provider.get_receipt(txn_hash)
+            receipt = upstream_provider.get_receipt(txn_hash)
+            self._canonical_transactions[txn_hash] = receipt
+            return receipt
