@@ -28,6 +28,10 @@ block_identifier = 7341111
 upstream_provider = "alchemy"
 block_identifier = 3071111
 
+[tool.ape.titanoboa.fork.ethereum.mainnet]
+upstream_provider = "alchemy"
+block_identifier = 21551111
+
 [tool.ape.ethereum.local]
 default_provider = "boa"
 
