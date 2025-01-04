@@ -1,5 +1,6 @@
 import re
 import time
+from abc import ABC
 from collections import defaultdict
 from copy import copy
 from functools import cached_property
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from ape_titanoboa.config import BoaConfig
 
 
-class BaseTitanoboaProvider(TestProviderAPI):
+class BaseTitanoboaProvider(TestProviderAPI, ABC):
     """
     A provider for Ape using titanoboa as its backend.
     """
