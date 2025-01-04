@@ -1,5 +1,6 @@
 import re
 import time
+from collections import defaultdict
 from copy import copy
 from functools import cached_property
 from types import ModuleType
@@ -51,7 +52,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
 
     # Account state.
     _accounts: dict[int, "TestAccount"] = {}
-    _nonces: dict["AddressType", int] = {}
+    _nonces: defaultdict["AddressType", int] = defaultdict(int)
 
     # Transaction state.
     _canonical_transactions: dict[str, dict] = {}
@@ -309,12 +310,12 @@ class BaseTitanoboaProvider(TestProviderAPI):
         txn.chain_id = self.chain_id
 
         if txn.nonce is None and txn.sender:
-            txn.nonce = self._nonces.get(txn.sender, 0)
+            txn.nonce = self._nonces[txn.sender]
 
         return txn
 
     def send_transaction(self, txn: "TransactionAPI") -> "ReceiptAPI":
-        sender_nonce = self._nonces.get(txn.sender, 0)
+        sender_nonce = self._nonces[txn.sender]
         tx_nonce = txn.nonce
         if tx_nonce is None or tx_nonce < sender_nonce:
             raise ProviderError(f"Invalid nonce '{tx_nonce}'.")
@@ -323,7 +324,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             # TODO: Improve this...
             while sender_nonce > tx_nonce:
                 time.sleep(1)
-                sender_nonce = self._nonces.get(txn.sender, 0)
+                sender_nonce = self._nonces[txn.sender]
 
         # Set block.timestamp/number for execution. This must be the
         # same during execution as it will be in the block.
@@ -410,7 +411,7 @@ class BaseTitanoboaProvider(TestProviderAPI):
             self.env.evm.patch.block_number = self.env.evm.patch.block_number - 1
 
         # Bump sender's nonce.
-        self._nonces[txn.sender] = self._nonces.get(txn.sender, 0) + 1
+        self._nonces[txn.sender] = self._nonces[txn.sender] + 1
 
         if revert is not None and txn.raise_on_revert:
             raise self.get_virtual_machine_error(revert) from revert
@@ -585,7 +586,7 @@ class TitanoboaProvider(BaseTitanoboaProvider):
         return self.boa.env
 
     def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
-        return self._nonces.get(address, 0)
+        return self._nonces[address]
 
     def get_block_by_number(self, number: int) -> "BlockAPI":
         try:
