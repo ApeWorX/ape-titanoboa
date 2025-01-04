@@ -275,12 +275,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         if not txn.receiver:
             raise ProviderError("Missing receiver.")
 
-        computation = self.env.execute_code(
-            data=txn.data,
-            gas=txn.gas_limit,
-            is_modifying=False,
-            to_address=txn.receiver,
-        )
+        computation = self._execute_code(txn.data, txn.gas_limit, receiver=txn.receiver)
         try:
             computation.raise_if_error()
         except Revert as err:
@@ -309,6 +304,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         txn.max_priority_fee = 0
         txn.gas_limit = self.env.evm.get_gas_limit()
         txn.chain_id = self.chain_id
+        txn.sender = txn.sender or to_hex(ZERO_ADDRESS)
 
         if txn.nonce is None and txn.sender:
             txn.nonce = self._nonces[txn.sender]
@@ -316,7 +312,8 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         return txn
 
     def send_transaction(self, txn: "TransactionAPI") -> "ReceiptAPI":
-        sender_nonce = self._nonces[txn.sender]
+        sender = txn.sender
+        sender_nonce = self._nonces[sender]
         tx_nonce = txn.nonce
         if tx_nonce is None or tx_nonce < sender_nonce:
             raise ProviderError(f"Invalid nonce '{tx_nonce}'.")
@@ -338,12 +335,12 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         # Process tx data.
         if txn.receiver:
             # Method call.
-            computation = self.env.execute_code(
-                data=txn.data,
-                gas=txn.gas_limit,
+            computation = self._execute_code(
+                txn.data,
+                txn.gas_limit,
+                is_modifying=True,
                 sender=txn.sender,
-                to_address=txn.receiver,
-                value=txn.value,
+                receiver=txn.receiver,
             )
 
         else:
@@ -415,7 +412,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         self._nonces[txn.sender] = self._nonces[txn.sender] + 1
 
         if revert is not None and txn.raise_on_revert:
-            raise self.get_virtual_machine_error(revert) from revert
+            raise self.get_virtual_machine_error(revert, txn=txn) from revert
 
         return receipt
 
@@ -514,9 +511,16 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             try:
                 message = decode(("string",), revert_data)[0]
             except Exception:
-                message = ""
+                # Likely a custom error.
+                message = to_hex(revert_data)
 
-            raise ContractLogicError(revert_message=message, **kwargs)
+            contract_logic_error = ContractLogicError(
+                base_err=exception,
+                revert_message=message,
+                **kwargs,
+            )
+            enriched_error = self.compiler_manager.enrich_error(contract_logic_error)
+            return enriched_error
 
         return VirtualMachineError(**kwargs)
 
@@ -573,6 +577,22 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
                 "parentHash": header.parent_hash,
                 "timestamp": timestamp,
             }
+        )
+
+    def _execute_code(
+        self,
+        data: bytes,
+        gas: int,
+        sender: Optional[Union[str, bytes]] = None,
+        receiver: Optional[Union[str, bytes]] = None,
+        is_modifying: bool = False,
+    ):
+        return self.env.execute_code(
+            data=data,
+            gas=gas,
+            is_modifying=is_modifying,
+            sender=sender,
+            to_address=receiver,
         )
 
 

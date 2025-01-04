@@ -2,7 +2,12 @@ import time
 
 import pytest
 from ape import Contract, reverts
-from ape.exceptions import BlockNotFoundError, ContractNotFoundError, TransactionNotFoundError
+from ape.exceptions import (
+    BlockNotFoundError,
+    ContractLogicError,
+    ContractNotFoundError,
+    TransactionNotFoundError,
+)
 from eth_utils import to_hex
 
 from ape_titanoboa.config import DEFAULT_TEST_CHAIN_ID
@@ -376,7 +381,7 @@ def test_chain_isolate(chain, owner, contract, accounts):
         pytest.fail(fail_msg)
 
 
-def test_estimate_gas_cost(chain, owner, contract_instance):
+def test_estimate_gas_cost(chain, owner, contract_instance, accounts):
     tx = contract_instance.setNumber.as_transaction(123, sender=owner)
     actual = chain.provider.estimate_gas_cost(tx)
     assert actual > 0
@@ -565,3 +570,17 @@ def test_block_identifier(chain, project, networks):
         # Test the default.
         with project.temp_config(titanoboa={}):
             assert chain.provider.block_identifier == "safe"
+
+
+def test_fork(networks, owner):
+    """
+    Show we can integrate nicely with Ape's `networks.fork()` method.
+    """
+    # Start off connected to a live network.
+    with networks.ethereum.sepolia.use_provider("alchemy"):
+        # When connected to a live network, it is typical to fork it for
+        # running simulations.
+        with networks.fork():
+            polyhedra = Contract("0x465C15e9e2F3837472B0B204e955c5205270CA9E")
+            with pytest.raises(ContractLogicError):
+                polyhedra.mint(owner.address, 1_000, sender=owner)
