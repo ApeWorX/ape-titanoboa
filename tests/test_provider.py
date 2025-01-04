@@ -8,7 +8,9 @@ from ape.exceptions import (
     ContractNotFoundError,
     TransactionNotFoundError,
 )
+from eth.exceptions import Revert
 from eth_utils import to_hex
+from hexbytes import HexBytes
 
 from ape_titanoboa.config import DEFAULT_TEST_CHAIN_ID
 
@@ -394,13 +396,18 @@ def test_set_balance(chain, owner):
     assert owner.balance == new_balance
 
 
-def test_reverts(chain, contract_instance, accounts):
+def test_reverts(contract_instance, accounts, project, owner):
     """
     Integration test with `ape.reverts`.
     """
     not_owner = accounts[2]
     with reverts("!authorized"):
         contract_instance.setNumber(55, sender=not_owner)
+
+    # Show it works with Solidity custom exceptions as well.
+    sol_contract = project.SolidityContract.deploy(700, sender=owner)
+    with reverts(sol_contract.Unauthorized):
+        sol_contract.withdraw(sender=not_owner)
 
 
 def test_trace(contract_instance, owner):
@@ -584,3 +591,14 @@ def test_fork(networks, owner):
             polyhedra = Contract("0x465C15e9e2F3837472B0B204e955c5205270CA9E")
             with pytest.raises(ContractLogicError):
                 polyhedra.mint(owner.address, 1_000, sender=owner)
+
+
+def test_get_virtual_machine_error(chain):
+    you_messed_up = (
+        "0x08c379a000000000000000000000000000000000000000000000000000000000000000"
+        "20000000000000000000000000000000000000000000000000000000000000000d796f75"
+        "206d657373656420757000000000000000000000000000000000000000"
+    )
+    revert = Revert(HexBytes(you_messed_up))
+    actual = chain.provider.get_virtual_machine_error(revert)
+    assert actual.revert_message == "you messed up"

@@ -10,11 +10,12 @@ extras_require = {
         "hypothesis>=6.2.0,<7.0",  # Strategy-based fuzzer
         "ape-alchemy",  # More reliable upstream provider
         "ape-etherscan",  # Needed for fetching a contract
+        "ape-solidity",  # Needed for compiling test contracts
         "ape-vyper>=0.8.8,<0.9",  # For compiling test contracts
     ],
     "lint": [
         "black>=24.10.0",  # auto-formatter and linter
-        "mypy>=1.13.0",  # Static type analyzer
+        "mypy==1.13.0",  # Static type analyzer
         "flake8>=7.1.1,<8",  # Style linter
         "flake8-breakpoint>=1.1.0,<2",  # Detect breakpoints left in code
         "flake8-print>=4.0.1,<5",  # Detect print statements left in code

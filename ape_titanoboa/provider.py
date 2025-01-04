@@ -509,7 +509,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             revert_data = raw_data[4:]
 
             try:
-                message = decode(("string",), revert_data)[0]
+                message = decode(("string",), revert_data, strict=False)[0]
             except Exception:
                 # Likely a custom error.
                 message = to_hex(revert_data)
