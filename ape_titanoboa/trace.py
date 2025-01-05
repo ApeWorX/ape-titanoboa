@@ -27,6 +27,10 @@ class BoaTrace(TransactionTrace):
 
     @cached_property
     def revert_message(self) -> Optional[str]:
+        if revert := self.transaction.get("revert"):
+            vm_err = self.provider.get_virtual_machine_error(revert)
+            return vm_err.revert_message
+
         return None
 
     def get_raw_frames(self) -> Iterator[dict]:

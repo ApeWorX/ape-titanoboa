@@ -38,7 +38,7 @@ def test_deploy_contract(contract, owner, networks):
     assert instance.myNumber() == 123
 
 
-def test_send_transaction(chain, contract_instance, contract, owner, networks):
+def test_send_transaction(chain, contract_instance, contract, owner, networks, not_owner):
     expected_block = chain.provider.get_block("pending")
     tx = contract_instance.setNumber(321, sender=owner)
     assert not tx.failed
@@ -62,6 +62,10 @@ def test_send_transaction(chain, contract_instance, contract, owner, networks):
     # Show it goes back to the local block number.
     tx = contract_instance.setNumber(321123, sender=owner)
     assert tx.block_number < block_id_from_config
+
+    # Show we can send failing transactions.
+    tx = contract_instance.setNumber(3213, sender=not_owner, raise_on_revert=False)
+    assert tx.failed
 
 
 def test_send_call(contract_instance, owner, contract, networks):
@@ -396,13 +400,17 @@ def test_set_balance(chain, owner):
     assert owner.balance == new_balance
 
 
-def test_reverts(contract_instance, accounts, project, owner):
+def test_reverts(contract_instance, project, owner, not_owner):
     """
     Integration test with `ape.reverts`.
     """
-    not_owner = accounts[2]
-    with reverts("!authorized"):
+    with reverts("!authorized") as revert:
         contract_instance.setNumber(55, sender=not_owner)
+
+    # Show we can get the exception and the transaction.
+    assert isinstance(revert.value, ContractLogicError)
+    failing_tx = revert.value.txn
+    assert failing_tx is not None
 
     # Show it works with Solidity custom exceptions as well.
     sol_contract = project.SolidityContract.deploy(700, sender=owner)
@@ -410,7 +418,7 @@ def test_reverts(contract_instance, accounts, project, owner):
         sol_contract.withdraw(sender=not_owner)
 
 
-def test_trace(contract_instance, owner):
+def test_trace(contract_instance, owner, not_owner):
     """
     Integration testing various tracing-related features
     you would use in testing, such `.return_value`.
@@ -430,6 +438,12 @@ def test_trace(contract_instance, owner):
     # CallTreeNode
     call_tree_node = tx.trace.get_calltree()
     assert call_tree_node is not None
+
+    # Get a failed receipt's trace.
+    failed_tx = contract_instance.setNumber(5, sender=not_owner, raise_on_revert=False)
+    assert failed_tx.failed
+    failed_trace = failed_tx.trace.revert_message
+    assert failed_trace == "!authorized"
 
 
 def test_account_impersonation(contract, contract_instance, owner, accounts, chain):

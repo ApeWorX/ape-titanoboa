@@ -378,6 +378,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             for log_idx, log in enumerate(computation.get_log_entries())
         ]
         txn_data = txn.model_dump()
+        status = TransactionStatusEnum.NO_ERROR if revert is None else TransactionStatusEnum.FAILING
         data = {
             "block_number": new_block_number,
             "computation": computation,
@@ -388,8 +389,9 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             "gas_used": computation.get_gas_used(),
             "logs": logs,
             "nonce": txn.nonce,
+            "revert": revert,
             "signature": txn.signature,
-            "status": TransactionStatusEnum.NO_ERROR,
+            "status": status,
             "to": txn.receiver,
             "transaction": txn_data,
             "txn_hash": txn_hash,
