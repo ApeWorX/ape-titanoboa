@@ -192,7 +192,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         self._timestamp_offset = 0
         self._canonical_transactions = {}
         self._pending_transactions = {}
-        self._nonces = {}
+        self._nonces = defaultdict(int)
         self._snapshot_state = {}
         self._execution_timestamp = None
 
