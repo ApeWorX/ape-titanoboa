@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+import sys
 from time import perf_counter
 
 from ape import accounts, chain, project
@@ -25,3 +27,7 @@ def cli(transaction_iterations):
     seconds = int(elapsed)
     milliseconds = int((elapsed - seconds) * 1000)
     echo(f"Time: {seconds} seconds {milliseconds} milliseconds")
+
+
+if __name__ == "__main__":
+    cli(sys.argv[1:])

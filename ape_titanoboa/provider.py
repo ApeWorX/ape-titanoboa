@@ -365,7 +365,6 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             )
             for log_idx, log in enumerate(computation.get_log_entries())
         ]
-        breakpoint()
         status = TransactionStatusEnum.NO_ERROR if revert is None else TransactionStatusEnum.FAILING
         data = {
             "block_number": new_block_number,
