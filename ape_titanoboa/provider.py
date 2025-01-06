@@ -365,7 +365,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             )
             for log_idx, log in enumerate(computation.get_log_entries())
         ]
-        txn_data = txn.model_dump()
+        breakpoint()
         status = TransactionStatusEnum.NO_ERROR if revert is None else TransactionStatusEnum.FAILING
         data = {
             "block_number": new_block_number,
@@ -381,7 +381,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             "signature": txn.signature,
             "status": status,
             "to": txn.receiver,
-            "transaction": txn_data,
+            "transaction": txn,
             "txn_hash": txn_hash,
         }
         receipt = BoaReceipt(**data)
