@@ -312,18 +312,6 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         return txn
 
     def send_transaction(self, txn: "TransactionAPI") -> "ReceiptAPI":
-        sender = txn.sender
-        sender_nonce = self._nonces[sender]
-        tx_nonce = txn.nonce
-        if tx_nonce is None or tx_nonce < sender_nonce:
-            raise ProviderError(f"Invalid nonce '{tx_nonce}'.")
-
-        else:
-            # TODO: Improve this...
-            while sender_nonce > tx_nonce:
-                time.sleep(1)
-                sender_nonce = self._nonces[txn.sender]
-
         # Set block.timestamp/number for execution. This must be the
         # same during execution as it will be in the block.
         execution_timestamp = self.pending_timestamp
