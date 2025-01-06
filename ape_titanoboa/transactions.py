@@ -1,7 +1,6 @@
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING
 
 from ape_ethereum.transactions import DynamicFeeTransaction, Receipt
-from eth.exceptions import Revert
 
 if TYPE_CHECKING:
     from eth_pydantic_types import HexBytes
@@ -12,8 +11,20 @@ class BoaReceipt(Receipt):
     A receipt that includes the computation.
     """
 
-    computation: Any
-    revert: Optional[Revert] = None
+    def __init__(self, **kwargs):
+        computation = kwargs.pop("computation")
+        revert = kwargs.pop("revert")
+        super().__init__(**kwargs)
+        self._computation = computation
+        self._revert = revert
+
+    @property
+    def computation(self):
+        return self._computation
+
+    @property
+    def revert(self):
+        return self._revert
 
 
 class BoaTransaction(DynamicFeeTransaction):
