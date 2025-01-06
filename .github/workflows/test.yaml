@@ -69,7 +69,7 @@ jobs:
             pip install .[test]
 
         - name: Ape Set-up
-          uses: ApeWorX/github-action@v3
+          uses: ApeWorX/github-action@fix/mkdir-fail
           with:
             python-version: ${{ matrix.python-version }}
 
