@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=51.1.1", "wheel", "setuptools_scm[toml]>=5.0"]
+requires = ["setuptools>=75.0.0", "wheel", "setuptools_scm[toml]>=5.0"]
 
 [tool.mypy]
 exclude = "build/"
@@ -14,18 +14,34 @@ write_to = "ape_titanoboa/version.py"
 
 [tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = '\.pyi?$'
+
+[tool.ape]
+contracts_folder = "tests/contracts"
+
+[tool.ape.titanoboa.fork.ethereum.sepolia]
+upstream_provider = "alchemy"
+block_identifier = 7341111
+
+[tool.ape.titanoboa.fork.ethereum.holesky]
+upstream_provider = "alchemy"
+block_identifier = 3071111
+
+[tool.ape.titanoboa.fork.ethereum.mainnet]
+upstream_provider = "alchemy"
+block_identifier = 21551111
+
+[tool.ape.ethereum.local]
+default_provider = "boa"
+
+[tool.ape.test]
+show_internal = true
 
 [tool.pytest.ini_options]
 addopts = """
-    -n auto
-    -p no:ape_test
-    --cov-branch
-    --cov-report term
-    --cov-report html
-    --cov-report xml
-    --cov=ape-titanoboa
+    -p no:pytest_ethereum
+    -p no:boa_test
 """
 python_files = "test_*.py"
 testpaths = "tests"
