@@ -1,4 +1,4 @@
-# @version 0.3.9
+# @version 0.4.0
 
 # @dev Emitted when number is changed.
 #
@@ -69,7 +69,7 @@ mixedArray: public(DynArray[DynArray[uint256, 1024][3], 1024][5])
 
 MAX_FOO : constant(uint256) = 5
 
-@external
+@deploy
 def __init__(num: uint256):
     self.myNumber = num
     self.owner = msg.sender
