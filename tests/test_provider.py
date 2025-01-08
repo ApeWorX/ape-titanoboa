@@ -13,6 +13,7 @@ from eth_utils import to_hex
 from hexbytes import HexBytes
 
 from ape_titanoboa.config import DEFAULT_TEST_CHAIN_ID
+from ape_titanoboa.trace import BoaTrace
 
 
 def test_is_connected(chain, networks):
@@ -446,7 +447,7 @@ def test_trace(contract_instance, owner, not_owner):
     assert failed_trace == "!authorized"
 
 
-def test_account_impersonation(contract, contract_instance, owner, accounts, chain):
+def test_impersonate_account(contract, contract_instance, owner, accounts, chain):
     """
     Ensuring the boa integration works with an account-impersonation flow.
     """
@@ -476,6 +477,28 @@ def test_account_impersonation(contract, contract_instance, owner, accounts, cha
     # Revert detection.
     with reverts("!authorized"):
         contract_instance.setNumber(55, sender=impersonated_account)
+
+    # Ensure still works when have made >9 transactions.
+    # This is important because it ensures that our made-up hash
+    # still works when it is an odd length (handles padding).
+    base = 557
+    for idx in range(10):
+        number = base + idx
+        tx = new_contract.setNumber(number, sender=impersonated_account)
+        expected = number + 5
+        assert tx.return_value == expected
+
+    # Check the return value for a failing receipt.
+    failed_tx = contract_instance.setNumber(5, sender=impersonated_account, raise_on_revert=False)
+    assert failed_tx.return_value is not None  # Mostly checking it does not fail.
+
+    # Show when we impersonate an account with a leading zero that it still works.
+    # (NOTE: There was a bug where the oddness of digits caused hashes to be missing when checking
+    #   `.return_value`, so this test is VERY important.
+    impersonated_account_2 = accounts["0x0d0707963952f2fba59dd06f2b425ace40b492fe"]
+    new_contract = contract.deploy(1, sender=impersonated_account_2)
+    tx = new_contract.setNumber(910, sender=impersonated_account_2)
+    assert tx.return_value == 915
 
 
 def test_set_timestamp(chain):
@@ -616,3 +639,9 @@ def test_get_virtual_machine_error(chain):
     revert = Revert(HexBytes(you_messed_up))
     actual = chain.provider.get_virtual_machine_error(revert)
     assert actual.revert_message == "you messed up"
+
+
+@pytest.mark.parametrize("tx_hash", ("0x123", HexBytes("0x123")))
+def test_boa_trace_transaction_hash(tx_hash):
+    trace = BoaTrace(transaction_hash=tx_hash)
+    assert trace.transaction_hash == "0x0123"

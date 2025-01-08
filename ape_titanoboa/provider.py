@@ -20,7 +20,7 @@ from eth.constants import ZERO_ADDRESS
 from eth.exceptions import Revert
 from eth.vm.spoof import SpoofTransaction
 from eth_abi import decode
-from eth_pydantic_types import HexBytes
+from eth_pydantic_types import HexBytes, HexStr
 from eth_utils import ValidationError, to_hex
 
 from ape_titanoboa.config import BoaForkConfig, ForkBlockIdentifier
@@ -353,7 +353,9 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             txn_hash = to_hex(txn.txn_hash)
         else:
             # Impersonated transaction. Make one up using the sender.
-            txn_hash = to_hex(int(txn.sender, 16) + txn.nonce)
+            # NOTE: We use HexStr.__eth_pydantic_validate__ to handle even-digit padding so
+            #   hashes are always found (in the case they get corrected later).
+            txn_hash = HexStr.__eth_pydantic_validate__(int(txn.sender, 16) + txn.nonce)
 
         logs: list[dict] = [
             convert_boa_log(
@@ -519,8 +521,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     def get_transaction_trace(  # type: ignore[empty-body]
         self, txn_hash: Union["HexBytes", str]
     ) -> "TraceAPI":
-        transaction_hash = to_hex(txn_hash) if isinstance(txn_hash, bytes) else f"{txn_hash}"
-        return BoaTrace(transaction_hash=transaction_hash)  # type: ignore
+        return BoaTrace(transaction_hash=txn_hash)  # type: ignore
 
     def get_test_account(self, index: int) -> "TestAccountAPI":
         if index in self._accounts:
