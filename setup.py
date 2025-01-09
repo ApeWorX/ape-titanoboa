@@ -8,17 +8,21 @@ extras_require = {
         "pytest-xdist",  # multi-process runner
         "pytest-cov",  # Coverage analyzer plugin
         "hypothesis>=6.2.0,<7.0",  # Strategy-based fuzzer
+        "ape-alchemy",  # More reliable upstream provider
+        "ape-etherscan",  # Needed for fetching a contract
+        "ape-solidity",  # Needed for compiling test contracts
+        "ape-vyper>=0.8.8,<0.9",  # For compiling test contracts
     ],
     "lint": [
         "black>=24.10.0",  # auto-formatter and linter
-        "mypy>=1.13.0",  # Static type analyzer
+        "mypy>=1.14.1",  # Static type analyzer
         "flake8>=7.1.1,<8",  # Style linter
         "flake8-breakpoint>=1.1.0,<2",  # Detect breakpoints left in code
         "flake8-print>=4.0.1,<5",  # Detect print statements left in code
         "flake8-pydantic",  # For detecting issues with Pydantic models
         "flake8-type-checking",  # Detect imports to move in/out of type-checking blocks
         "isort>=5.13.2",  # Import sorting linter
-        "mdformat>=0.7.19",  # Auto-formatter for markdown
+        "mdformat>=0.7.21",  # Auto-formatter for markdown
         "mdformat-gfm>=0.3.5",  # Needed for formatting GitHub-flavored markdown
         "mdformat-frontmatter>=0.4.1",  # Needed for frontmatters-style headers in issue templates
         "mdformat-pyproject>=0.0.2",  # Allows configuring in pyproject.toml
@@ -62,13 +66,13 @@ setup(
     include_package_data=True,
     install_requires=[
         "eth-ape>=0.8.22,<0.9",
-        "pytest>=7.2,<9.0",
-        "titanoboa>=0.1.6",
+        "cchecksum>=0.0.3,<1",
+        "titanoboa>=0.2.5,<0.3",
+        "web3>=7.6.1,<8",
     ],
     python_requires=">=3.9,<4",
     extras_require=extras_require,
     py_modules=["ape_titanoboa"],
-    entry_points={"pytest11": ["ape-titanoboa=ape_titanoboa.pytest_plugin"]},
     license="Apache-2.0",
     zip_safe=False,
     keywords="ethereum",
@@ -83,7 +87,6 @@ setup(
         "Operating System :: POSIX",
         "Framework :: Pytest",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
