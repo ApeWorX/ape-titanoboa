@@ -52,7 +52,9 @@ jobs:
 
         strategy:
             matrix:
-                os: [ubuntu-latest, macos-latest]   # eventually add `windows-latest`
+                # TODO: Can add macos-latest once https://github.com/ApeWorX/github-action/pull/37
+                #   is released.
+                os: [ubuntu-latest]   # eventually add `windows-latest`
                 python-version: ["3.10", "3.11", "3.12", "3.13"]
 
         steps:
