@@ -2,11 +2,7 @@ import time
 
 import pytest
 from ape import Contract, reverts
-from ape.exceptions import (
-    BlockNotFoundError,
-    ContractLogicError,
-    TransactionNotFoundError,
-)
+from ape.exceptions import BlockNotFoundError, ContractLogicError, TransactionNotFoundError
 from eth.exceptions import Revert
 from eth_utils import to_hex
 from hexbytes import HexBytes
