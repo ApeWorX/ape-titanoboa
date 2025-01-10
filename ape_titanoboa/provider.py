@@ -329,6 +329,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
                 is_modifying=True,
                 sender=txn.sender,
                 receiver=txn.receiver,
+                value=txn.value,
             )
 
         else:
@@ -576,6 +577,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         sender: Optional[Union[str, bytes]] = None,
         receiver: Optional[Union[str, bytes]] = None,
         is_modifying: bool = False,
+        value: int = 0,
     ):
         return self.env.execute_code(
             data=data,
@@ -583,6 +585,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             is_modifying=is_modifying,
             sender=sender,
             to_address=receiver,
+            value=value,
         )
 
 

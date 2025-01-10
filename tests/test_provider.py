@@ -72,6 +72,12 @@ def test_send_transaction(chain, contract_instance, contract, owner, networks, n
     assert tx.failed
 
 
+def test_send_transaction_payable(contract_instance, owner):
+    contract_instance.gimmeMoney(value=1, sender=owner)
+    with reverts():
+        contract_instance.gimmeMoney(sender=owner)
+
+
 def test_send_call(contract_instance, owner, contract, networks):
     result = contract_instance.myNumber()
     assert result == 123
