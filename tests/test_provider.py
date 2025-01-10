@@ -5,7 +5,6 @@ from ape import Contract, reverts
 from ape.exceptions import (
     BlockNotFoundError,
     ContractLogicError,
-    ContractNotFoundError,
     TransactionNotFoundError,
 )
 from eth.exceptions import Revert
