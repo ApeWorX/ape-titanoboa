@@ -167,10 +167,20 @@ def test_AccountAPI_nonce(owner, contract, chain, networks):
     assert owner.nonce == nonce_before_fork
 
 
+def test_ReceiptAPI_logs(owner, contract_instance):
+    tx = contract_instance.setNumber(321, sender=owner)
+    actual = tx.logs
+    for log in actual:
+        for topic in log["topics"]:
+            # Every topic *MUST* be 32 bytes or else it may fail
+            # to decode to an event.
+            assert len(topic) == 32
+
+
 def test_ReceiptAPI_events(owner, contract_instance):
     """
     Shows the integration with `ReceiptAPI.events / decode_logs` works
-    (testing the result of `TitanobaProvider.send_transaction() | .get_receipt()`).
+    (testing the result of `TitanoboaProvider.send_transaction() | .get_receipt()`).
     """
     tx = contract_instance.setNumber(321, sender=owner)
     actual = tx.events
