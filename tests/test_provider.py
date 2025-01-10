@@ -2,11 +2,7 @@ import time
 
 import pytest
 from ape import Contract, reverts
-from ape.exceptions import (
-    BlockNotFoundError,
-    ContractLogicError,
-    TransactionNotFoundError,
-)
+from ape.exceptions import BlockNotFoundError, ContractLogicError, TransactionNotFoundError
 from eth.exceptions import Revert
 from eth_utils import to_hex
 from hexbytes import HexBytes
@@ -70,6 +66,12 @@ def test_send_transaction(chain, contract_instance, contract, owner, networks, n
     # Show we can send failing transactions.
     tx = contract_instance.setNumber(3213, sender=not_owner, raise_on_revert=False)
     assert tx.failed
+
+
+def test_send_transaction_payable(contract_instance, owner):
+    contract_instance.gimmeMoney(value=1, sender=owner)
+    with reverts():
+        contract_instance.gimmeMoney(sender=owner)
 
 
 def test_send_call(contract_instance, owner, contract, networks):

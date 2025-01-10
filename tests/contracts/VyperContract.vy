@@ -102,6 +102,11 @@ def setNumber(num: uint256) -> uint256:
     log NumberChange(block.prevhash, self.prevNumber, "Dynamic", num, "Dynamic")
     return num + 5
 
+@payable
+@external
+def gimmeMoney():
+    assert msg.value > 0, "Value must be greater than zero"
+
 @external
 def setAddress(_address: address):
     self.theAddress = _address
