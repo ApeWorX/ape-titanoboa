@@ -40,7 +40,7 @@ Boa works the same as other Ape testing providers such as `ape-foundry` or the E
 ### Fast Mode
 
 By default, `ape-titanoboa` runs boa in "fast mode".
-To disable fast mode, configure the plugin like this:
+To disable fast mode, configure the plugin with `fast_mode: False`:
 
 ```yaml
 titanoboa:
