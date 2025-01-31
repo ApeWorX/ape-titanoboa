@@ -43,3 +43,8 @@ class BoaConfig(PluginConfig):
     """
     Maps ecosystem name -> network name -> fork configuration (e.g. block number).
     """
+
+    fast_mode: bool = False
+    """
+    To enable fast mode, set to ``True``.
+    """
