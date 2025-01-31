@@ -41,6 +41,7 @@ def test_deploy_contract(contract, owner, networks):
 def test_send_transaction(chain, contract_instance, contract, owner, networks, not_owner):
     expected_block = chain.provider.get_block("pending")
     tx = contract_instance.setNumber(321, sender=owner)
+    assert tx.signature is None
     assert not tx.failed
     assert tx.block_number == expected_block.number
 
@@ -74,6 +75,12 @@ def test_send_transaction_payable(contract_instance, owner):
     contract_instance.gimmeMoney(value=1, sender=owner)
     with reverts():
         contract_instance.gimmeMoney(sender=owner)
+
+
+def test_send_transaction_sign(contract_instance, owner):
+    tx = contract_instance.gimmeMoney(value=1, sender=owner, sign=True)
+    assert tx.signature is not None
+    assert not tx.failed
 
 
 def test_send_call(contract_instance, owner, contract, networks, run_fork_tests):
