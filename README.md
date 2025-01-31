@@ -37,6 +37,16 @@ ape test --network ethereum:local:boa
 
 Boa works the same as other Ape testing providers such as `ape-foundry` or the Ethereum tester that comes with `ape-test` by default.
 
+### Fast Mode
+
+By default, `ape-titanoboa` runs boa in "fast mode".
+To disable fast mode, configure the plugin like this:
+
+```yaml
+titanoboa:
+  fast_mode: False
+```
+
 ### Fork Mode
 
 You can for networks using `ape-titanoba` to simulate actions.

@@ -597,7 +597,9 @@ class TitanoboaProvider(BaseTitanoboaProvider):
     @cached_property
     def env(self) -> "Env":
         self.boa.env.evm.patch.chain_id = self.settings.chain_id
-        self.boa.env.enable_fast_mode()
+        if self.config.fast_mode:
+            self.boa.env.enable_fast_mode()
+
         return self.boa.env
 
     def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
