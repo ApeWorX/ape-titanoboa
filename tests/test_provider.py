@@ -97,9 +97,9 @@ def test_send_call(contract_instance, owner, contract, networks, run_fork_tests)
             polyhedra = Contract("0x465C15e9e2F3837472B0B204e955c5205270CA9E")
             assert polyhedra.name() == "tZKJ"
 
-    # Show it works the same back on local.
-    result = contract_instance.myNumber()
-    assert result == 123
+        # Show it works the same back on local.
+        result = contract_instance.myNumber()
+        assert result == 123
 
 
 def test_get_receipt(contract_instance, owner, chain, networks, run_fork_tests):
@@ -664,6 +664,9 @@ def test_fork(networks, owner, run_fork_tests):
         pytest.skip("Fork tests skipped")
 
     # Start off connected to a live network.
+    if not run_fork_tests:
+        pytest.skip("Fork tests skipped")
+
     with networks.ethereum.sepolia.use_provider("alchemy"):
         # When connected to a live network, it is typical to fork it for
         # running simulations.
