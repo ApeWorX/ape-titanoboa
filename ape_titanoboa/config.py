@@ -8,6 +8,7 @@ from ape.types import BlockID
 #   now we want this to be the same as ape-foundry's default.
 DEFAULT_TEST_CHAIN_ID = 31337
 ForkBlockIdentifier = Union[BlockID, Literal["safe"]]
+LALA = 2
 
 
 class BoaForkConfig(PluginConfig):
