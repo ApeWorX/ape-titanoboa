@@ -4,7 +4,7 @@ Use Titanoboa as a provider in Ape.
 
 ## Dependencies
 
-* [python3](https://www.python.org/downloads) version 3.9 or greater, python3-dev
+- [python3](https://www.python.org/downloads) version 3.9 or greater, python3-dev
 
 ## Installation
 

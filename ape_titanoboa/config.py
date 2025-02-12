@@ -48,3 +48,8 @@ class BoaConfig(PluginConfig):
     """
     To enable fast mode, set to ``True``.
     """
+
+    auto_mine: bool = True
+    """
+    Set to ``False`` to disable auto-mining.
+    """

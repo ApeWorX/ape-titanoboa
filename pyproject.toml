@@ -38,6 +38,15 @@ block_identifier = 21551111
 [tool.ape.ethereum.local]
 default_provider = "boa"
 
+[tool.ape.ethereum.mainnet_fork]
+default_provider = "boa"
+
+[tool.ape.ethereum.sepolia_fork]
+default_provider = "boa"
+
+[tool.ape.ethereum.holesky_fork]
+default_provider = "boa"
+
 [tool.ape.test]
 show_internal = true
 
