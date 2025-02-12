@@ -71,7 +71,7 @@ jobs:
             pip install .[test]
 
         - name: Ape Set-up
-          uses: ApeWorX/github-action@v3
+          uses: ApeWorX/github-action@fix/macos-cache
           with:
             python-version: ${{ matrix.python-version }}
 
