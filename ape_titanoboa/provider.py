@@ -48,7 +48,6 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     NAME: ClassVar[str] = "boa"
 
     # Flags.
-    _auto_mine: bool = True
     _connected: bool = False
 
     # Account state.
@@ -106,11 +105,11 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
     @property
     def auto_mine(self) -> bool:
-        return self._auto_mine
+        return self.config.auto_mine
 
     @auto_mine.setter
     def auto_mine(self, value):
-        self._auto_mine = value
+        self.config.auto_mine = value
 
     @cached_property
     def mnemonic_seed(self) -> bytes:
@@ -389,7 +388,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         receipt = BoaReceipt(**data)
 
         # Prepare new block/transaction.
-        if self._auto_mine:
+        if self.auto_mine:
             # Advance the chain.
             self._blocks.append({"ts": execution_timestamp, "txns": [txn_hash]})
             self._canonical_transactions[txn_hash] = data
