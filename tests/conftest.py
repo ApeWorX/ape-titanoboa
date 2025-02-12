@@ -7,6 +7,19 @@ if TYPE_CHECKING:
     from ape.contracts import ContractContainer, ContractInstance
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--no-forks",
+        action="store_true",
+        help="Don't run tests requiring forked networks",
+    )
+
+
+@pytest.fixture(scope="session")
+def run_fork_tests(request):
+    return not request.config.getoption("--no-forks")
+
+
 @pytest.fixture(scope="session")
 def contract(project) -> "ContractContainer":
     return project.VyperContract

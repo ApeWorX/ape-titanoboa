@@ -76,7 +76,12 @@ jobs:
             python-version: ${{ matrix.python-version }}
 
         - name: Run Tests
-          run: ape test
+          run: |
+            if [[ "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
+              ape test
+            else
+              ape test --no-forks
+            fi
           env:
             WEB3_ALCHEMY_API_KEY: ${{ secrets.WEB3_ALCHEMY_API_KEY }}
             ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
