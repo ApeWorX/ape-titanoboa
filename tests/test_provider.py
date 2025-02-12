@@ -284,7 +284,7 @@ def test_ChainManager_mine(chain):
     assert chain.blocks.height == height + 1
 
 
-def test_auto_mine(chain, owner):
+def test_auto_mine(chain, owner, project):
     assert chain.provider.auto_mine
     chain.provider.auto_mine = False
     assert not chain.provider.auto_mine
@@ -305,6 +305,12 @@ def test_auto_mine(chain, owner):
     assert chain.blocks.height == height
 
     chain.provider.auto_mine = True
+
+    # Show can set auto-mine in config.
+    with project.temp_config(titanoboa={"auto_mine": True}):
+        assert chain.provider.auto_mine
+    with project.temp_config(titanoboa={"auto_mine": False}):
+        assert not chain.provider.auto_mine
 
 
 def test_snapshot(chain):
