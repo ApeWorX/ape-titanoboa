@@ -23,6 +23,7 @@ from eth_abi import decode
 from eth_pydantic_types import HexBytes, HexStr
 from eth_utils import ValidationError, to_hex
 
+from ape_titanoboa.accounts import BoaAccount
 from ape_titanoboa.config import BoaForkConfig, ForkBlockIdentifier
 from ape_titanoboa.trace import BoaTrace
 from ape_titanoboa.transactions import BoaReceipt, BoaTransaction
@@ -529,10 +530,10 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
         # Generate account for the first time.
         keys = self._generate_keys(index)
-        account = self.account_manager.init_test_account(
-            index,
-            keys[0],
-            str(keys[1]),
+        account = BoaAccount(
+            index=index,
+            address_str=keys[0],
+            private_key=f"{keys[1]}",
         )
         self._accounts[index] = account
 

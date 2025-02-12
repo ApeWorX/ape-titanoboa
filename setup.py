@@ -14,15 +14,15 @@ extras_require = {
         "ape-vyper>=0.8.8,<0.9",  # For compiling test contracts
     ],
     "lint": [
-        "black>=24.10.0",  # auto-formatter and linter
-        "mypy>=1.14.1",  # Static type analyzer
+        "black>=25.1.0",  # auto-formatter and linter
+        "mypy>=1.15.0",  # Static type analyzer
         "flake8>=7.1.1,<8",  # Style linter
         "flake8-breakpoint>=1.1.0,<2",  # Detect breakpoints left in code
         "flake8-print>=4.0.1,<5",  # Detect print statements left in code
         "flake8-pydantic",  # For detecting issues with Pydantic models
         "flake8-type-checking",  # Detect imports to move in/out of type-checking blocks
-        "isort>=5.13.2",  # Import sorting linter
-        "mdformat>=0.7.21",  # Auto-formatter for markdown
+        "isort>=6.0.0",  # Import sorting linter
+        "mdformat>=0.7.22",  # Auto-formatter for markdown
         "mdformat-gfm>=0.3.5",  # Needed for formatting GitHub-flavored markdown
         "mdformat-frontmatter>=0.4.1",  # Needed for frontmatters-style headers in issue templates
         "mdformat-pyproject>=0.0.2",  # Allows configuring in pyproject.toml
@@ -65,7 +65,7 @@ setup(
     url="https://github.com/ApeWorX/ape-titanoboa",
     include_package_data=True,
     install_requires=[
-        "eth-ape>=0.8.22,<0.9",
+        "eth-ape>=0.8.25,<0.9",
         "cchecksum>=0.0.3,<1",
         "titanoboa>=0.2.5,<0.3",
         "web3>=7.6.1,<8",
