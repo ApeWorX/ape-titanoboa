@@ -733,6 +733,36 @@ def test_get_contract_logs(chain, contract_instance, owner):
         assert log.event_name == "NumberChange"
 
 
+def test_get_contract_logs_exclude_stop_block(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    log_filter = LogFilter(
+        start_block=start_block,
+        addresses=[contract_instance.address],
+        events=[contract_instance.NumberChange.abi],
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 3  # Stop defaults to chain height, so we still get all 3 logs.
+
+
+def test_get_contract_logs_stop_exceeds_chain_height(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    stop_block = chain.blocks.height + 10
+    log_filter = LogFilter(
+        start_block=start_block,
+        stop_block=stop_block,
+        addresses=[contract_instance.address],
+        events=[contract_instance.NumberChange.abi],
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 3  # Gets all 3, once we exceed the height, we stop.
+
+
 def test_prepare_transaction(chain, owner):
     tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
     tx.max_fee = None
