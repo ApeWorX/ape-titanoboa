@@ -287,6 +287,11 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         try:
             data = self._canonical_transactions[txn_hash]
         except KeyError as err:
+            if isinstance(txn_hash, bytes):
+                raise ValueError(
+                    "Received bytes hash instead of str. Try passing `to_hex(txn_hash)`."
+                )
+
             raise TransactionNotFoundError(txn_hash) from err
 
         return BoaReceipt(**data)
@@ -409,7 +414,36 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         return receipt
 
     def get_contract_logs(self, log_filter: "LogFilter") -> Iterator["ContractLog"]:
-        yield from []
+        start_block = log_filter.start_block or 0
+        stop_block = log_filter.stop_block or self.get_block("latest").number or 0
+        for block_number in range(start_block, stop_block + 1):
+            block = self.get_block(block_number)
+            for transaction in block.transactions:
+                if transaction.receiver not in log_filter.addresses:
+                    continue
+
+                # Transaction found to one of the given addresses.
+                txn_hash = to_hex(transaction.txn_hash)
+                try:
+                    receipt = self.get_receipt(txn_hash)
+                except TransactionNotFoundError:
+                    continue
+
+                for tx_event in receipt.events:
+                    # TODO: Can simplify this once https://github.com/ApeWorX/ape/pull/2504
+                    for req_event in log_filter.events:
+                        if tx_event.event_name != req_event.name:
+                            continue
+
+                        req_input_names = [x.name or "" for x in req_event.inputs]
+
+                        # Verify inputs.
+                        for ipt_argname in tx_event.event_arguments:
+                            if ipt_argname not in req_input_names:
+                                continue
+
+                        # Found an event matching the query.
+                        yield tx_event
 
     def snapshot(self) -> "SnapshotID":
         snapshot = self.env.evm.snapshot()

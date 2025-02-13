@@ -3,6 +3,7 @@ import time
 import pytest
 from ape import Contract, reverts
 from ape.exceptions import BlockNotFoundError, ContractLogicError, TransactionNotFoundError
+from ape.types.events import LogFilter
 from eth.exceptions import Revert
 from eth_utils import to_hex
 from hexbytes import HexBytes
@@ -663,10 +664,6 @@ def test_fork(networks, owner, run_fork_tests):
     if not run_fork_tests:
         pytest.skip("Fork tests skipped")
 
-    # Start off connected to a live network.
-    if not run_fork_tests:
-        pytest.skip("Fork tests skipped")
-
     with networks.ethereum.sepolia.use_provider("alchemy"):
         # When connected to a live network, it is typical to fork it for
         # running simulations.
@@ -691,3 +688,22 @@ def test_get_virtual_machine_error(chain):
 def test_boa_trace_transaction_hash(tx_hash):
     trace = BoaTrace(transaction_hash=tx_hash)
     assert trace.transaction_hash == "0x0123"
+
+
+def test_get_contract_logs(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    stop_block = chain.blocks.height
+    log_filter = LogFilter(
+        start_block=start_block,
+        stop_block=stop_block,
+        addresses=[contract_instance.address],
+        events=[contract_instance.NumberChange.abi],
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 3
+
+    for log in actual:
+        assert log.event_name == "NumberChange"
