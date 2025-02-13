@@ -763,6 +763,23 @@ def test_get_contract_logs_stop_exceeds_chain_height(chain, contract_instance, o
     assert len(actual) == 3  # Gets all 3, once we exceed the height, we stop.
 
 
+def test_get_contract_logs_no_address(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    stop_block = chain.blocks.height + 10
+    log_filter = LogFilter(
+        start_block=start_block,
+        stop_block=stop_block,
+        addresses=[],
+        events=[contract_instance.NumberChange.abi],
+    )
+    expected = (
+        r"Address must be either a single hexadecimal encoded address "
+        r"or a non-empty list of hexadecimal encoded addresses"
+    )
+    with pytest.raises(ValueError, match=expected):
+        _ = [log for log in chain.provider.get_contract_logs(log_filter)]
+
+
 def test_prepare_transaction(chain, owner):
     tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
     tx.max_fee = None
