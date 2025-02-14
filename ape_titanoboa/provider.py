@@ -462,12 +462,24 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
                                 # Isn't the correct event (same name, different inputs).
                                 continue
 
-                        # Found the correct event.
-                        # Verify topic-search.
-                        # if log_filter.topic_filter:
-                        #     breakpoint()
+                        # Verify topic search.
+                        found_match = True
+                        actual_topics = tx_event.topics[1:]
+                        for idx, search_topic in enumerate(log_filter.topic_filter[1:]):
+                            if search_topic is None:
+                                # Wildcard.
+                                continue
 
-                        yield tx_event
+                            if not isinstance(search_topic, (list, tuple)):
+                                search_topic = [search_topic]
+
+                            matching_topic = actual_topics[idx]
+                            if matching_topic not in search_topic:
+                                found_match = False
+                                break
+
+                        if found_match:
+                            yield tx_event
 
     def snapshot(self) -> "SnapshotID":
         snapshot = self.env.evm.snapshot()

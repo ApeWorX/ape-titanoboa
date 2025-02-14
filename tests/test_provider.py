@@ -780,6 +780,21 @@ def test_get_contract_logs_no_address(chain, contract_instance, owner):
         _ = [log for log in chain.provider.get_contract_logs(log_filter)]
 
 
+def test_get_contract_logs_topic_filters(chain, contract_instance, owner):
+    contract_instance.setNumber(10, sender=owner)
+    contract_instance.setNumber(20, sender=owner)
+    contract_instance.setNumber(30, sender=owner)
+    log_filter = LogFilter.from_event(
+        contract_instance.NumberChange,
+        addresses=[contract_instance.address],
+        search_topics={"newNum": 20},
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 1  # Gets only 1 because of the topic filter.
+    assert actual[0].event_name == "NumberChange"
+    assert actual[0].event_arguments["newNum"] == 20
+
+
 def test_prepare_transaction(chain, owner):
     tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
     tx.max_fee = None
