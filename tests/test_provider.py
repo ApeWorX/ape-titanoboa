@@ -39,6 +39,16 @@ def test_deploy_contract(contract, owner, networks):
     assert instance.myNumber() == 123
 
 
+def test_deploy_contract_with_default_payable_method(chain, project, owner):
+    """
+    Tests against a bug where if you tried to deploy a contract with a default
+    payable method, Ape's proxy detection system would trigger an error
+    about mutating static-call state.
+    """
+    contract = project.ContractWithDefaultPayable.deploy(sender=owner)
+    assert contract.contract_type.name == "ContractWithDefaultPayable"
+
+
 def test_send_transaction(chain, contract_instance, contract, owner, networks, not_owner):
     expected_block = chain.provider.get_block("pending")
     tx = contract_instance.setNumber(321, sender=owner)
@@ -101,6 +111,14 @@ def test_send_call(contract_instance, owner, contract, networks, run_fork_tests)
         # Show it works the same back on local.
         result = contract_instance.myNumber()
         assert result == 123
+
+
+def test_send_call_method_not_exists(chain, contract_instance):
+    tx = chain.provider.network.ecosystem.create_transaction(
+        data="0x12345678000", receiver=contract_instance.address
+    )
+    with pytest.raises(ContractLogicError):
+        _ = chain.provider.send_call(tx)
 
 
 def test_get_receipt(contract_instance, owner, chain, networks, run_fork_tests):

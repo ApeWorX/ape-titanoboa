@@ -17,7 +17,7 @@ from ape.exceptions import (
 )
 from ape_ethereum.transactions import TransactionStatusEnum
 from eth.constants import ZERO_ADDRESS
-from eth.exceptions import Revert
+from eth.exceptions import Revert, WriteProtection
 from eth.vm.spoof import SpoofTransaction
 from eth_abi import decode
 from eth_pydantic_types import HexBytes, HexStr
@@ -278,8 +278,15 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         computation = self._execute_code(txn.data, txn.gas_limit, receiver=txn.receiver)
         try:
             computation.raise_if_error()
+
         except Revert as err:
             raise self.get_virtual_machine_error(err) from err
+
+        except WriteProtection as err:
+            # This occurs when calling an ABI that does not exist
+            # on a contract with a default payable method. Regular
+            # nodes still seem to revert here, we pretend to do the same.
+            raise ContractLogicError() from err
 
         return HexBytes(computation.output)
 
@@ -531,14 +538,17 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
-            raw_data = exception.args[0]
-            revert_data = raw_data[4:]
+            if raw_data := exception.args[0]:
+                revert_data = raw_data[4:]
 
-            try:
-                message = decode(("string",), revert_data, strict=False)[0]
-            except Exception:
-                # Likely a custom error.
-                message = to_hex(revert_data)
+                try:
+                    message = decode(("string",), revert_data, strict=False)[0]
+                except Exception:
+                    # Likely a custom error.
+                    message = to_hex(revert_data)
+
+            else:
+                message = VirtualMachineError.DEFAULT_MESSAGE
 
             contract_logic_error = ContractLogicError(
                 base_err=exception,
