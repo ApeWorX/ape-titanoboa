@@ -39,6 +39,16 @@ def test_deploy_contract(contract, owner, networks):
     assert instance.myNumber() == 123
 
 
+def test_deploy_contract_with_default_payable_method(chain, project, owner):
+    """
+    Tests against a bug where if you tried to deploy a contract with a default
+    payable method, Ape's proxy detection system would trigger an error
+    about mutating static-call state.
+    """
+    contract = project.ContractWithDefaultPayable.deploy(sender=owner)
+    assert contract.contract_type.name == "ContractWithDefaultPayable"
+
+
 def test_send_transaction(chain, contract_instance, contract, owner, networks, not_owner):
     expected_block = chain.provider.get_block("pending")
     tx = contract_instance.setNumber(321, sender=owner)

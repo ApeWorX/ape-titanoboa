@@ -35,6 +35,6 @@ def not_owner(accounts) -> "AccountAPI":
     return accounts[1]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def contract_instance(contract, owner) -> "ContractInstance":
     return contract.deploy(123, sender=owner)
