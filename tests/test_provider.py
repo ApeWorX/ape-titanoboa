@@ -103,6 +103,14 @@ def test_send_call(contract_instance, owner, contract, networks, run_fork_tests)
         assert result == 123
 
 
+def test_send_call_method_not_exists(chain, contract_instance):
+    tx = chain.provider.network.ecosystem.create_transaction(
+        data="0x12345678000", receiver=contract_instance.address
+    )
+    with pytest.raises(ContractLogicError):
+        _ = chain.provider.send_call(tx)
+
+
 def test_get_receipt(contract_instance, owner, chain, networks, run_fork_tests):
     local_tx = contract_instance.setNumber(321, sender=owner)
     actual = chain.provider.get_receipt(local_tx.txn_hash)

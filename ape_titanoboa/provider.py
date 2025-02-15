@@ -531,14 +531,17 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
     def get_virtual_machine_error(self, exception: Exception, **kwargs) -> VirtualMachineError:
         if isinstance(exception, Revert):
-            raw_data = exception.args[0]
-            revert_data = raw_data[4:]
+            if raw_data := exception.args[0]:
+                revert_data = raw_data[4:]
 
-            try:
-                message = decode(("string",), revert_data, strict=False)[0]
-            except Exception:
-                # Likely a custom error.
-                message = to_hex(revert_data)
+                try:
+                    message = decode(("string",), revert_data, strict=False)[0]
+                except Exception:
+                    # Likely a custom error.
+                    message = to_hex(revert_data)
+
+            else:
+                message = VirtualMachineError.DEFAULT_MESSAGE
 
             contract_logic_error = ContractLogicError(
                 base_err=exception,
