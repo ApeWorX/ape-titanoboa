@@ -317,10 +317,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         txn.gas_limit = self.env.evm.get_gas_limit()
         txn.chain_id = self.chain_id
         txn.sender = txn.sender or to_hex(ZERO_ADDRESS)
-
-        if txn.nonce is None:
-            txn.nonce = self._nonces[txn.sender] if txn.sender else 0
-
+        txn.nonce = self._nonces[txn.sender] if txn.nonce is None else txn.nonce
         return txn
 
     def send_transaction(self, txn: "TransactionAPI") -> "ReceiptAPI":

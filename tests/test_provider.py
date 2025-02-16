@@ -555,6 +555,12 @@ def test_impersonate_account(contract, contract_instance, owner, accounts, chain
     tx = new_contract.setNumber(910, sender=impersonated_account_2)
     assert tx.return_value == 915
 
+    # Ensure it works when the transaction nonce is None.
+    tx = new_contract.setNumber.as_transaction(910, sender=impersonated_account_2)
+    tx.nonce = None  # Hack
+    receipt = chain.provider.send_transaction(tx)
+    assert not receipt.failed
+
 
 def test_set_timestamp(chain):
     time_at_start = int(time.time())
@@ -725,3 +731,17 @@ def test_get_contract_logs(chain, contract_instance, owner):
 
     for log in actual:
         assert log.event_name == "NumberChange"
+
+
+def test_prepare_transaction(chain, owner):
+    tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
+    actual = chain.provider.prepare_transaction(tx)
+    assert actual.sender == owner
+    assert actual.nonce == owner.nonce
+
+
+def test_prepare_transaction_sender_not_known(chain, owner):
+    tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
+    actual = chain.provider.prepare_transaction(tx)
+    assert actual.sender == owner
+    assert actual.nonce == owner.nonce
