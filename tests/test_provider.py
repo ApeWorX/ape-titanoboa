@@ -735,13 +735,15 @@ def test_get_contract_logs(chain, contract_instance, owner):
 
 def test_prepare_transaction(chain, owner):
     tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
+    tx.max_fee = None
     actual = chain.provider.prepare_transaction(tx)
     assert actual.sender == owner
-    assert actual.nonce == owner.nonce
+    assert actual.max_fee is not None
 
 
 def test_prepare_transaction_sender_not_known(chain, owner):
     tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
+    tx.max_fee = None
     actual = chain.provider.prepare_transaction(tx)
     assert actual.sender == owner
-    assert actual.nonce == owner.nonce
+    assert actual.max_fee is not None
