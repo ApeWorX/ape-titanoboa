@@ -318,8 +318,8 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         txn.chain_id = self.chain_id
         txn.sender = txn.sender or to_hex(ZERO_ADDRESS)
 
-        if txn.nonce is None and txn.sender:
-            txn.nonce = self._nonces[txn.sender]
+        if txn.nonce is None:
+            txn.nonce = self._nonces[txn.sender] if txn.sender else 0
 
         return txn
 
@@ -364,11 +364,12 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         # Figure out the transaction's hash.
         if txn.signature:
             txn_hash = to_hex(txn.txn_hash)
+
         else:
             # Impersonated transaction. Make one up using the sender.
             # NOTE: We use HexStr.__eth_pydantic_validate__ to handle even-digit padding so
             #   hashes are always found (in the case they get corrected later).
-            txn_hash = HexStr.__eth_pydantic_validate__(int(txn.sender, 16) + txn.nonce)
+            txn_hash = HexStr.__eth_pydantic_validate__(int(txn.sender, 16) + (txn.nonce or 0))
 
         logs: list[dict] = [
             convert_boa_log(
