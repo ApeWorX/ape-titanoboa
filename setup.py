@@ -66,6 +66,7 @@ setup(
     include_package_data=True,
     install_requires=[
         "eth-ape>=0.8.27,<0.9",
+        "ethpm-types>=0.6.24,<0.7",
         "cchecksum>=0.0.3,<1",
         "titanoboa>=0.2.5,<0.3",
         "web3>=7.6.1,<8",
