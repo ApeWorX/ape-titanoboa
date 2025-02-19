@@ -65,7 +65,7 @@ setup(
     url="https://github.com/ApeWorX/ape-titanoboa",
     include_package_data=True,
     install_requires=[
-        "eth-ape>=0.8.25,<0.9",
+        "eth-ape>=0.8.27,<0.9",
         "cchecksum>=0.0.3,<1",
         "titanoboa>=0.2.5,<0.3",
         "web3>=7.6.1,<8",
