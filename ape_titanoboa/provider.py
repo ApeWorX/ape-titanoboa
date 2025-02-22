@@ -420,9 +420,22 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
     def get_contract_logs(self, log_filter: "LogFilter") -> Iterator["ContractLog"]:
         start_block = log_filter.start_block or 0
-        stop_block = log_filter.stop_block or self.get_block("latest").number or 0
+        stop_block = log_filter.stop_block or self.get_block("latest").number or max(0, start_block)
+
+        if not log_filter.addresses:
+            # Mimics Eth-Tester.
+            raise ValueError(
+                "Address must be either a single hexadecimal encoded address "
+                "or a non-empty list of hexadecimal encoded addresses"
+            )
+
         for block_number in range(start_block, stop_block + 1):
-            block = self.get_block(block_number)
+            try:
+                block = self.get_block(block_number)
+            except BlockNotFoundError:
+                # End the loop once we reached the end of the valid block range.
+                return
+
             for transaction in block.transactions:
                 if transaction.receiver not in log_filter.addresses:
                     continue
@@ -438,6 +451,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
                     # TODO: Can simplify this once https://github.com/ApeWorX/ape/pull/2504
                     for req_event in log_filter.events:
                         if tx_event.event_name != req_event.name:
+                            # Is an event with a different name.
                             continue
 
                         req_input_names = [x.name or "" for x in req_event.inputs]
@@ -445,10 +459,27 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
                         # Verify inputs.
                         for ipt_argname in tx_event.event_arguments:
                             if ipt_argname not in req_input_names:
+                                # Isn't the correct event (same name, different inputs).
                                 continue
 
-                        # Found an event matching the query.
-                        yield tx_event
+                        # Verify topic search.
+                        found_match = True
+                        actual_topics = tx_event.topics[1:]
+                        for idx, search_topic in enumerate(log_filter.topic_filter[1:]):
+                            if search_topic is None:
+                                # Wildcard.
+                                continue
+
+                            if not isinstance(search_topic, (list, tuple)):
+                                search_topic = [search_topic]
+
+                            matching_topic = actual_topics[idx]
+                            if matching_topic not in search_topic:
+                                found_match = False
+                                break
+
+                        if found_match:
+                            yield tx_event
 
     def snapshot(self) -> "SnapshotID":
         snapshot = self.env.evm.snapshot()

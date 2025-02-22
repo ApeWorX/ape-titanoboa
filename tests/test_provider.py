@@ -733,6 +733,68 @@ def test_get_contract_logs(chain, contract_instance, owner):
         assert log.event_name == "NumberChange"
 
 
+def test_get_contract_logs_exclude_stop_block(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    log_filter = LogFilter(
+        start_block=start_block,
+        addresses=[contract_instance.address],
+        events=[contract_instance.NumberChange.abi],
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 3  # Stop defaults to chain height, so we still get all 3 logs.
+
+
+def test_get_contract_logs_stop_exceeds_chain_height(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    contract_instance.setNumber(321, sender=owner)
+    stop_block = chain.blocks.height + 10
+    log_filter = LogFilter(
+        start_block=start_block,
+        stop_block=stop_block,
+        addresses=[contract_instance.address],
+        events=[contract_instance.NumberChange.abi],
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 3  # Gets all 3, once we exceed the height, we stop.
+
+
+def test_get_contract_logs_no_address(chain, contract_instance, owner):
+    start_block = chain.blocks.height
+    stop_block = chain.blocks.height + 10
+    log_filter = LogFilter(
+        start_block=start_block,
+        stop_block=stop_block,
+        addresses=[],
+        events=[contract_instance.NumberChange.abi],
+    )
+    expected = (
+        r"Address must be either a single hexadecimal encoded address "
+        r"or a non-empty list of hexadecimal encoded addresses"
+    )
+    with pytest.raises(ValueError, match=expected):
+        _ = [log for log in chain.provider.get_contract_logs(log_filter)]
+
+
+def test_get_contract_logs_topic_filters(chain, contract_instance, owner):
+    contract_instance.setNumber(10, sender=owner)
+    contract_instance.setNumber(20, sender=owner)
+    contract_instance.setNumber(30, sender=owner)
+    log_filter = LogFilter.from_event(
+        contract_instance.NumberChange,
+        addresses=[contract_instance.address],
+        search_topics={"newNum": 20},
+    )
+    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    assert len(actual) == 1  # Gets only 1 because of the topic filter.
+    assert actual[0].event_name == "NumberChange"
+    assert actual[0].event_arguments["newNum"] == 20
+
+
 def test_prepare_transaction(chain, owner):
     tx = chain.provider.network.ecosystem.create_transaction(nonce=0, sender=owner)
     tx.max_fee = None
