@@ -4,7 +4,6 @@ from setuptools import find_packages, setup  # type: ignore
 
 extras_require = {
     "test": [  # `test` GitHub Action jobs uses this
-        "pytest>=6.0",  # Core testing package
         "pytest-xdist",  # multi-process runner
         "pytest-cov",  # Coverage analyzer plugin
         "hypothesis>=6.2.0,<7.0",  # Strategy-based fuzzer
@@ -68,12 +67,18 @@ setup(
         "eth-ape>=0.8.27,<0.9",
         "ethpm-types>=0.6.24,<0.7",
         "cchecksum>=0.0.3,<1",
+        "pytest",  # This package provides a pytest plugin (pined to eth-ape version)
         "titanoboa>=0.2.5,<0.3",
         "web3>=7.6.1,<8",
     ],
     python_requires=">=3.9,<4",
     extras_require=extras_require,
     py_modules=["ape_titanoboa"],
+    entry_points={
+        "pytest11": [
+            "ape_titanoboa=ape_titanoboa.pytest",
+        ],
+    },
     license="Apache-2.0",
     zip_safe=False,
     keywords="ethereum",
