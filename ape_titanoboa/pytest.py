@@ -60,6 +60,9 @@ class BaseTestCase(ManagerAccessMixin):
 class TestCase(pytest.Item, BaseTestCase):
     def runtest(self):
         method = getattr(self.contract, self.name)
+        # TODO: `.call` w/ injected contract "fixtures"?
+        #       e.g. `def foo(c: project.MyContract, ...)` will inject instance of
+        #       `project.MyContract` and call `method` w/ it (check `ABIType.internalType`)
 
         # TODO: `.call` w/ fuzzed args if args present
         # TODO: Add strategy adaption w/ custom NatSpec
