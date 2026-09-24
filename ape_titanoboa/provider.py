@@ -200,18 +200,20 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
 
-    def get_balance(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
+    def get_balance(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
         return self.env.get_balance(address)
 
     def get_code(
-        self, address: "AddressType", block_id: Optional["BlockID"] = None
+        self,
+        address: "AddressType",
+        block_id: Optional["BlockID"] = None,  # noqa: ARG002
     ) -> "ContractCode":
         return self.env.get_code(address)
 
     def make_request(self, rpc: str, parameters: Iterable | None = None) -> Any:
         raise NotImplementedError()
 
-    def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
+    def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
         receiver_bytes = HexBytes(txn.receiver) if txn.receiver else ZERO_ADDRESS
         evm_tx_data = {
             "data": txn.data,
@@ -269,9 +271,9 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     def send_call(
         self,
         txn: "TransactionAPI",
-        block_id: Optional["BlockID"] = None,
-        state: dict | None = None,
-        **kwargs,
+        block_id: Optional["BlockID"] = None,  # noqa: ARG002
+        state: dict | None = None,  # noqa: ARG002
+        **kwargs,  # noqa: ARG002
     ) -> "HexBytes":
         if not txn.receiver:
             raise ProviderError("Missing receiver.")
@@ -291,14 +293,14 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
         return HexBytes(computation.output)
 
-    def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
+    def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":  # noqa: ARG002
         try:
             data = self._canonical_transactions[txn_hash]
         except KeyError as err:
             if isinstance(txn_hash, bytes):
                 raise ValueError(
                     "Received bytes hash instead of str. Try passing `to_hex(txn_hash)`."
-                )
+                ) from None
 
             raise TransactionNotFoundError(txn_hash) from err
 
@@ -585,8 +587,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
                 revert_message=message,
                 **kwargs,
             )
-            enriched_error = self.compiler_manager.enrich_error(contract_logic_error)
-            return enriched_error
+            return self.compiler_manager.enrich_error(contract_logic_error)
 
         return VirtualMachineError(**kwargs)
 
@@ -625,7 +626,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         account = Account.from_key(pkey)
         return account.address, pkey
 
-    def unlock_account(self, address: "AddressType") -> bool:
+    def unlock_account(self, address: "AddressType") -> bool:  # noqa: ARG002
         # NOTE: All accounts are basically unlocked in boa.
         return True
 
@@ -676,14 +677,14 @@ class TitanoboaProvider(BaseTitanoboaProvider):
 
         return self.boa.env
 
-    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
+    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
         return self._nonces[address]
 
     def get_block_by_number(self, number: int) -> "BlockAPI":
         try:
             timestamp = self._blocks[number]["ts"]
         except IndexError:
-            raise BlockNotFoundError(number)
+            raise BlockNotFoundError(number) from None
 
         return self._init_blockapi(self._reusable_header, number, timestamp)
 
@@ -692,7 +693,7 @@ class TitanoboaProvider(BaseTitanoboaProvider):
         try:
             timestamp = self._blocks[block_index]["ts"]
         except IndexError:
-            raise BlockNotFoundError(HexBytes(block_hash))
+            raise BlockNotFoundError(HexBytes(block_hash)) from None
 
         # Block index is the same as block number for local networks.
         return self._init_blockapi(self._reusable_header, block_index, timestamp)
@@ -777,7 +778,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         self.fork.__exit__()
         super().disconnect()
 
-    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:
+    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
         if address in self._nonces:
             return self._nonces[address]
 
@@ -807,7 +808,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
             timestamp = self._blocks[index]["ts"]
         except IndexError:
             # NOTE: Ensure we raise error with the *given* number.
-            raise BlockNotFoundError(number)
+            raise BlockNotFoundError(number) from None
 
         return self._init_blockapi(self._reusable_header, number, timestamp)
 
@@ -836,7 +837,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         with self._upstream_connection as provider:
             return provider.make_request(rpc, parameters=parameters)
 
-    def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":
+    def get_receipt(self, txn_hash: str, **kwargs) -> "ReceiptAPI":  # noqa: ARG002
         if data := self._canonical_transactions.get(txn_hash):
             if isinstance(data, dict):
                 # Transaction made with this plugin (boa).
