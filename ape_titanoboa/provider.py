@@ -2,10 +2,11 @@ import re
 import time
 from abc import ABC
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from copy import copy
 from functools import cached_property
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, Union
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.exceptions import (
@@ -67,10 +68,10 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
 
     # Time.
     # Used when `set_timestamp()` is called.
-    _pending_timestamp: Optional[int] = None
+    _pending_timestamp: int | None = None
     # Used when timestamp was set but then mined to keep us in the future.
     _timestamp_offset: int = 0
-    _execution_timestamp: Optional[int] = None  # Used when auto mine is off.
+    _execution_timestamp: int | None = None  # Used when auto mine is off.
 
     @cached_property
     def boa(self) -> ModuleType:
@@ -146,7 +147,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
             # Use the same time from last execution (so it retains in the block).
             return self._execution_timestamp
 
-        elif self._pending_timestamp is not None:
+        if self._pending_timestamp is not None:
             # Time is frozen (via `set_timestamp()`).
             return self._pending_timestamp
 
@@ -207,7 +208,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     ) -> "ContractCode":
         return self.env.get_code(address)
 
-    def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
+    def make_request(self, rpc: str, parameters: Iterable | None = None) -> Any:
         raise NotImplementedError()
 
     def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:
@@ -242,11 +243,11 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     def get_block(self, block_id: "BlockID") -> BlockAPI:
         if isinstance(block_id, int):
             return self.get_block_by_number(block_id)
-        elif block_id == "earliest":
+        if block_id == "earliest":
             return self.earliest_block
-        elif block_id == "latest":
+        if block_id == "latest":
             return self.latest_block
-        elif block_id == "pending":
+        if block_id == "pending":
             return self.pending_block
 
         return self.get_block_by_hash(block_id)
@@ -269,7 +270,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         self,
         txn: "TransactionAPI",
         block_id: Optional["BlockID"] = None,
-        state: Optional[dict] = None,
+        state: dict | None = None,
         **kwargs,
     ) -> "HexBytes":
         if not txn.receiver:
@@ -544,7 +545,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         )
         self._pending_transactions = {}
 
-    def _advance_chain(self, blocks: int = 1, transaction_hashes: Optional[list] = None):
+    def _advance_chain(self, blocks: int = 1, transaction_hashes: list | None = None):
         for _ in range(blocks):
             # NOTE: auto-mine is off, the pending timestamp refers to the timestamp
             #   set before executing any EVM code (transactions), so it is the same
@@ -647,8 +648,8 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         self,
         data: bytes,
         gas: int,
-        sender: Optional[Union[str, bytes]] = None,
-        receiver: Optional[Union[str, bytes]] = None,
+        sender: str | bytes | None = None,
+        receiver: str | bytes | None = None,
         is_modifying: bool = False,
         value: int = 0,
     ):
@@ -736,8 +737,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
     def _upstream_connection(self) -> "ProviderContextManager":
         if provider := self.fork_config.upstream_provider:
             return self.forked_network.upstream_network.use_provider(provider)
-        else:
-            return self.forked_network.upstream_network.use_default_provider()
+        return self.forked_network.upstream_network.use_default_provider()
 
     @cached_property
     def fork_url(self) -> str:
@@ -793,7 +793,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         if number == start_number:
             return self.forked_block_start
 
-        elif number < start_number:
+        if number < start_number:
             # Is before fork.
             return self._get_block_from_upstream(number)
 
@@ -832,7 +832,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
             self._upstream_blocks[block_id] = upstream_block
             return upstream_block
 
-    def make_request(self, rpc: str, parameters: Optional[Iterable] = None) -> Any:
+    def make_request(self, rpc: str, parameters: Iterable | None = None) -> Any:
         with self._upstream_connection as provider:
             return provider.make_request(rpc, parameters=parameters)
 
