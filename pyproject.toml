@@ -77,8 +77,9 @@ exclude = ["tests", "tests.*"]
 ape_titanoboa = ["py.typed"]
 
 [tool.setuptools_scm]
-tag_regex = "^(?:[\\w-]+-)?(?P<version>v?\\.?\\d+(?:\\.\\d+){0,2}[^\\+]*)(?:\\+.*)?$"
 write_to = "ape_titanoboa/version.py"
+tag_regex = "^(?:[\\w-]+-)?v?\\.?(?P<version>\\d+(?:\\.\\d+){0,2}(?:(?:a|b|rc|\\.dev|\\.post)\\d+)?)(?:\\+.*)?$"
+fallback_version = "0.8.0"
 
 [tool.mypy]
 exclude = "build/"
