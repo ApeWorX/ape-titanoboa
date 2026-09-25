@@ -170,7 +170,9 @@ def test_get_receipt(contract_instance, owner, chain, networks, run_fork_tests):
             _ = chain.provider.get_receipt(holesky_tx.txn_hash)
 
 
-def test_AccountAPI_nonce(owner, contract, chain, networks, run_fork_tests):
+def test_AccountAPI_nonce(  # noqa: N802
+    owner, contract, chain, networks, run_fork_tests
+):
     """
     Showing the integration with `AccountAPI.nonce` works
     (testing `TitanoboaProvider.get_nonce()` indirectly).
@@ -203,7 +205,9 @@ def test_AccountAPI_nonce(owner, contract, chain, networks, run_fork_tests):
         assert owner.nonce == nonce_before_fork
 
 
-def test_ReceiptAPI_logs(owner, contract_instance):
+def test_ReceiptAPI_logs(  # noqa: N802
+    owner, contract_instance
+):
     tx = contract_instance.setNumber(321, sender=owner)
     actual = tx.logs
     for log in actual:
@@ -213,7 +217,9 @@ def test_ReceiptAPI_logs(owner, contract_instance):
             assert len(topic) == 32
 
 
-def test_ReceiptAPI_events(owner, contract_instance):
+def test_ReceiptAPI_events(  # noqa: N802
+    owner, contract_instance
+):
     """
     Shows the integration with `ReceiptAPI.events / decode_logs` works
     (testing the result of `TitanoboaProvider.send_transaction() | .get_receipt()`).
@@ -293,7 +299,9 @@ def test_get_transactions_by_block(contract_instance, owner, chain):
     assert to_hex(actual[-1].txn_hash) == tx.txn_hash
 
 
-def test_AccountAPI_balance(owner, networks, run_fork_tests):
+def test_AccountAPI_balance(  # noqa: N802
+    owner, networks, run_fork_tests
+):
     """
     Show the integration with `AccountAPI.balance` works
     (calls `TitanoboaProvider.get_balance()` under-the-hood.
@@ -309,7 +317,9 @@ def test_AccountAPI_balance(owner, networks, run_fork_tests):
     assert owner.balance == balance
 
 
-def test_ChainManager_mine(chain):
+def test_ChainManager_mine(  # noqa: N802
+    chain,
+):
     """
     Calls `TitanoboaProvider.mine()` under-the-hood.
     """
@@ -688,13 +698,15 @@ def test_fork(networks, owner, run_fork_tests):
     if not run_fork_tests:
         pytest.skip("Fork tests skipped")
 
-    with networks.ethereum.sepolia.use_provider("alchemy"):
+    with (
+        networks.ethereum.sepolia.use_provider("alchemy"),
+        networks.fork(),
+    ):
         # When connected to a live network, it is typical to fork it for
         # running simulations.
-        with networks.fork():
-            polyhedra = Contract("0x465C15e9e2F3837472B0B204e955c5205270CA9E")
-            with pytest.raises(ContractLogicError):
-                polyhedra.mint(owner.address, 1_000, sender=owner)
+        polyhedra = Contract("0x465C15e9e2F3837472B0B204e955c5205270CA9E")
+        with pytest.raises(ContractLogicError):
+            polyhedra.mint(owner.address, 1_000, sender=owner)
 
 
 def test_get_virtual_machine_error(chain):
@@ -708,7 +720,7 @@ def test_get_virtual_machine_error(chain):
     assert actual.revert_message == "you messed up"
 
 
-@pytest.mark.parametrize("tx_hash", ("0x123", HexBytes("0x123")))
+@pytest.mark.parametrize("tx_hash", ["0x123", HexBytes("0x123")])
 def test_boa_trace_transaction_hash(tx_hash):
     trace = BoaTrace(transaction_hash=tx_hash)
     assert trace.transaction_hash == "0x0123"
@@ -726,7 +738,7 @@ def test_get_contract_logs(chain, contract_instance, owner):
         addresses=[contract_instance.address],
         events=[contract_instance.NumberChange.abi],
     )
-    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    actual = list(chain.provider.get_contract_logs(log_filter))
     assert len(actual) == 3
 
     for log in actual:
@@ -743,7 +755,7 @@ def test_get_contract_logs_exclude_stop_block(chain, contract_instance, owner):
         addresses=[contract_instance.address],
         events=[contract_instance.NumberChange.abi],
     )
-    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    actual = list(chain.provider.get_contract_logs(log_filter))
     assert len(actual) == 3  # Stop defaults to chain height, so we still get all 3 logs.
 
 
@@ -759,7 +771,7 @@ def test_get_contract_logs_stop_exceeds_chain_height(chain, contract_instance, o
         addresses=[contract_instance.address],
         events=[contract_instance.NumberChange.abi],
     )
-    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    actual = list(chain.provider.get_contract_logs(log_filter))
     assert len(actual) == 3  # Gets all 3, once we exceed the height, we stop.
 
 
@@ -777,7 +789,7 @@ def test_get_contract_logs_no_address(chain, contract_instance, owner):
         r"or a non-empty list of hexadecimal encoded addresses"
     )
     with pytest.raises(ValueError, match=expected):
-        _ = [log for log in chain.provider.get_contract_logs(log_filter)]
+        _ = list(chain.provider.get_contract_logs(log_filter))
 
 
 def test_get_contract_logs_topic_filters(chain, contract_instance, owner):
@@ -789,7 +801,7 @@ def test_get_contract_logs_topic_filters(chain, contract_instance, owner):
         addresses=[contract_instance.address],
         search_topics={"newNum": 20},
     )
-    actual = [log for log in chain.provider.get_contract_logs(log_filter)]
+    actual = list(chain.provider.get_contract_logs(log_filter))
     assert len(actual) == 1  # Gets only 1 because of the topic filter.
     assert actual[0].event_name == "NumberChange"
     assert actual[0].event_arguments["newNum"] == 20
