@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from ape.api.config import PluginConfig
 from ape.types import BlockID
@@ -7,7 +7,7 @@ from ape.types import BlockID
 #   can use `ape.utils.testing.DEFAULT_TEST_CHAIN_ID`, but for
 #   now we want this to be the same as ape-foundry's default.
 DEFAULT_TEST_CHAIN_ID = 31337
-ForkBlockIdentifier = BlockID | Literal["safe"]
+ForkBlockIdentifier: TypeAlias = BlockID | Literal["safe"]
 
 
 class BoaForkConfig(PluginConfig):
