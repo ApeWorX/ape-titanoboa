@@ -1,5 +1,6 @@
+from collections.abc import Iterator
 from functools import cached_property
-from typing import Any, Iterator, Optional
+from typing import Any
 
 from ape_ethereum.trace import TransactionTrace
 from evm_trace import CallTreeNode
@@ -26,7 +27,7 @@ class BoaTrace(TransactionTrace):
         return self.provider.network.ecosystem.decode_returndata(abi, output)
 
     @cached_property
-    def revert_message(self) -> Optional[str]:
+    def revert_message(self) -> str | None:
         if revert := self.transaction.get("revert"):
             vm_err = self.provider.get_virtual_machine_error(revert)
             return vm_err.revert_message
