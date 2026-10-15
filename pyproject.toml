@@ -143,9 +143,9 @@ fast_mode = true
 upstream_provider = "alchemy"
 block_identifier = 7341111
 
-[tool.ape.titanoboa.fork.ethereum.holesky]
+[tool.ape.titanoboa.fork.ethereum.hoodi]
 upstream_provider = "alchemy"
-block_identifier = 3071111
+block_identifier = "safe"
 
 [tool.ape.titanoboa.fork.ethereum.mainnet]
 upstream_provider = "alchemy"
@@ -160,7 +160,7 @@ default_provider = "boa"
 [tool.ape.ethereum.sepolia_fork]
 default_provider = "boa"
 
-[tool.ape.ethereum.holesky_fork]
+[tool.ape.ethereum.hoodi_fork]
 default_provider = "boa"
 
 [tool.ape.test]

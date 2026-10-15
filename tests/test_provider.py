@@ -148,12 +148,8 @@ def test_get_receipt(contract_instance, owner, chain, networks, run_fork_tests):
         with pytest.raises(TransactionNotFoundError):
             _ = chain.provider.get_receipt(sepolia_tx.txn_hash)
 
-        # Get a holesky receipt.
-        with networks.ethereum.holesky_fork.use_provider("boa"):
-            txn_hash = "0x611745e08130a55df98a3758ac6029fb68a60651dad15d6ee6435e457ac8ed34"
-            receipt = chain.provider.get_receipt(txn_hash)
-            assert receipt.txn_hash == txn_hash
-
+        # Third fork network (hoodi — alchemy dropped holesky).
+        with networks.ethereum.hoodi_fork.use_provider("boa"):
             # Ensure the local transaction we made isn't available.
             with pytest.raises(TransactionNotFoundError):
                 _ = chain.provider.get_receipt(local_tx.txn_hash)
@@ -162,12 +158,12 @@ def test_get_receipt(contract_instance, owner, chain, networks, run_fork_tests):
             with pytest.raises(TransactionNotFoundError):
                 _ = chain.provider.get_receipt(sepolia_tx.txn_hash)
 
-            holesky_tx = owner.transfer(owner, 0)
-            assert chain.provider.get_receipt(holesky_tx.txn_hash).txn_hash == holesky_tx.txn_hash
+            hoodi_tx = owner.transfer(owner, 0)
+            assert chain.provider.get_receipt(hoodi_tx.txn_hash).txn_hash == hoodi_tx.txn_hash
 
-        # Ensure the holesky-fork transaction we made isn't available.
+        # Ensure the hoodi-fork transaction we made isn't available.
         with pytest.raises(TransactionNotFoundError):
-            _ = chain.provider.get_receipt(holesky_tx.txn_hash)
+            _ = chain.provider.get_receipt(hoodi_tx.txn_hash)
 
 
 def test_AccountAPI_nonce(  # noqa: N802
@@ -191,7 +187,7 @@ def test_AccountAPI_nonce(  # noqa: N802
     assert chain.provider.get_nonce(vitalik) == 0
 
     if run_fork_tests:
-        with networks.ethereum.holesky_fork.use_provider("boa"):
+        with networks.ethereum.hoodi_fork.use_provider("boa"):
             # Transact so the nonce changes on the fork.
             start_nonce = owner.nonce
             owner.transfer(owner, 9)
@@ -666,9 +662,9 @@ def test_chain_id(chain, networks, run_fork_tests):
     assert actual == expected
 
     if run_fork_tests:
-        with networks.ethereum.holesky_fork.use_provider("boa") as holesky_fork:
-            actual = holesky_fork.chain_id
-            expected = 17000  # Holesky
+        with networks.ethereum.hoodi_fork.use_provider("boa") as hoodi_fork:
+            actual = hoodi_fork.chain_id
+            expected = 560048  # Hoodi (alchemy dropped holesky)
             assert actual == expected
 
         # Show it goes back.
