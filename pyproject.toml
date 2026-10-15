@@ -47,6 +47,11 @@ test = [
     "pytest-xdist",
     "pytest-cov",
     "hypothesis>=6.2.0,<7",
+    "pytest-mock",
+    "ape-alchemy>=0.8.8,<0.9",  # More reliable upstream provider
+    "ape-etherscan>=0.8.7,<0.9",  # Needed for fetching a contract
+    "ape-solidity>=0.8.6,<0.9",  # Needed for compiling test contracts
+    "ape-vyper>=0.8.8,<0.9",  # For compiling test contracts
 ]
 lint = [
     "mypy>=1.15.0,<2",
@@ -126,6 +131,40 @@ combine-as-imports = true
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+
+[tool.ape]
+contracts_folder = "tests/contracts"
+
+[tool.ape.titanoboa]
+fast_mode = true
+
+[tool.ape.titanoboa.fork.ethereum.sepolia]
+upstream_provider = "alchemy"
+block_identifier = 7341111
+
+[tool.ape.titanoboa.fork.ethereum.holesky]
+upstream_provider = "alchemy"
+block_identifier = 3071111
+
+[tool.ape.titanoboa.fork.ethereum.mainnet]
+upstream_provider = "alchemy"
+block_identifier = 21551111
+
+[tool.ape.ethereum.local]
+default_provider = "boa"
+
+[tool.ape.ethereum.mainnet_fork]
+default_provider = "boa"
+
+[tool.ape.ethereum.sepolia_fork]
+default_provider = "boa"
+
+[tool.ape.ethereum.holesky_fork]
+default_provider = "boa"
+
+[tool.ape.test]
+show_internal = true
 
 [tool.pytest.ini_options]
 addopts = """
