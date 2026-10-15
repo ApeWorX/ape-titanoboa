@@ -56,7 +56,7 @@ jobs:
         strategy:
             matrix:
                 os: [ubuntu-latest, macos-latest]   # eventually add `windows-latest`
-                python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+                python-version: ["3.10", "3.11", "3.12", "3.13"]  # 3.14: vyper/vvm has no installable compiler yet
 
         steps:
         - uses: actions/checkout@v6
