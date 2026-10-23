@@ -188,7 +188,9 @@ def test_AccountAPI_nonce(  # noqa: N802
 
     if run_fork_tests:
         with networks.ethereum.hoodi_fork.use_provider("boa"):
-            # Transact so the nonce changes on the fork.
+            # Transact so the nonce changes on the fork. The well-known test
+            # mnemonic account is drained on live Hoodi, so fund it on the fork.
+            chain.provider.set_balance(owner.address, 10**18)
             start_nonce = owner.nonce
             owner.transfer(owner, 9)
             assert owner.nonce == start_nonce + 1
