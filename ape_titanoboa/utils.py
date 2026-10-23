@@ -1,5 +1,5 @@
 from cchecksum import to_checksum_address
-from eth_pydantic_types import HashBytes32
+from eth_pydantic_types import HexBytes32
 
 
 def convert_boa_log(log: tuple, **kwargs) -> dict:
@@ -7,7 +7,7 @@ def convert_boa_log(log: tuple, **kwargs) -> dict:
     return {
         "address": address,
         "data": log[2],
-        "topics": [HashBytes32.__eth_pydantic_validate__(t) for t in log[1]],
+        "topics": [HexBytes32.__eth_pydantic_validate__(t) for t in log[1]],
         "type": "mined",
         **kwargs,
     }
