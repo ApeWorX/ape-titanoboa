@@ -6,7 +6,7 @@ from collections.abc import Iterable, Iterator
 from copy import copy
 from functools import cached_property
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ape.api.providers import BlockAPI, TestProviderAPI
 from ape.exceptions import (
@@ -200,20 +200,20 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     def update_settings(self, new_settings: dict):
         self.provider_settings = new_settings
 
-    def get_balance(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
+    def get_balance(self, address: "AddressType", block_id: "BlockID | None" = None) -> int:  # noqa: ARG002
         return self.env.get_balance(address)
 
     def get_code(
         self,
         address: "AddressType",
-        block_id: Optional["BlockID"] = None,  # noqa: ARG002
+        block_id: "BlockID | None" = None,  # noqa: ARG002
     ) -> "ContractCode":
         return self.env.get_code(address)
 
     def make_request(self, rpc: str, parameters: Iterable | None = None) -> Any:
         raise NotImplementedError()
 
-    def estimate_gas_cost(self, txn: "TransactionAPI", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
+    def estimate_gas_cost(self, txn: "TransactionAPI", block_id: "BlockID | None" = None) -> int:  # noqa: ARG002
         receiver_bytes = HexBytes(txn.receiver) if txn.receiver else ZERO_ADDRESS
         evm_tx_data = {
             "data": txn.data,
@@ -271,7 +271,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
     def send_call(
         self,
         txn: "TransactionAPI",
-        block_id: Optional["BlockID"] = None,  # noqa: ARG002
+        block_id: "BlockID | None" = None,  # noqa: ARG002
         state: dict | None = None,  # noqa: ARG002
         **kwargs,  # noqa: ARG002
     ) -> "HexBytes":
@@ -595,7 +595,7 @@ class BaseTitanoboaProvider(TestProviderAPI, ABC):
         self.env.set_balance(address, amount)
 
     def get_transaction_trace(  # type: ignore[empty-body]
-        self, txn_hash: Union["HexBytes", str]
+        self, txn_hash: "HexBytes | str"
     ) -> "TraceAPI":
         return BoaTrace(transaction_hash=txn_hash)  # type: ignore
 
@@ -677,7 +677,7 @@ class TitanoboaProvider(BaseTitanoboaProvider):
 
         return self.boa.env
 
-    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
+    def get_nonce(self, address: "AddressType", block_id: "BlockID | None" = None) -> int:  # noqa: ARG002
         return self._nonces[address]
 
     def get_block_by_number(self, number: int) -> "BlockAPI":
@@ -778,7 +778,7 @@ class ForkTitanoboaProvider(BaseTitanoboaProvider):
         self.fork.__exit__()
         super().disconnect()
 
-    def get_nonce(self, address: "AddressType", block_id: Optional["BlockID"] = None) -> int:  # noqa: ARG002
+    def get_nonce(self, address: "AddressType", block_id: "BlockID | None" = None) -> int:  # noqa: ARG002
         if address in self._nonces:
             return self._nonces[address]
 
